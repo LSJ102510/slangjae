@@ -1,0 +1,49 @@
+/* 실험용 3D 갤러리 오버레이의 애니메이션 — Tailwind 기본 animate-*에 없는 것만 둔다. */
+
+/* 카드가 바뀔 때 캡션 줄이 차례로 살짝 올라오며 나타난다 */
+@keyframes lab-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 캡션 머리줄의 가는 선이 왼쪽에서 그어진다 */
+@keyframes lab-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* "위로 밀어 보기" 안내가 위아래로 천천히 떠다닌다 */
+@keyframes lab-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lab-rise {
+    animation: lab-rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .lab-draw {
+    transform-origin: left;
+    animation: lab-draw 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  .lab-float {
+    animation: lab-float 2.4s ease-in-out infinite;
+  }
+}

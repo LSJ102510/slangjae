@@ -19,7 +19,9 @@
       "!**/*.d.ts",
       "!**/public",
       // Figma에서 export한 Lottie JSON — 사람이 고치는 파일이 아니라 포매팅 대상에서 뺀다
-      "!**/src/assets/lottie"
+      "!**/src/assets/lottie",
+      // 외부 데모(houmahani/codrops-depth-gallery, MIT)를 그대로 가져온 실험용 코드 — 원본과 비교할 수 있게 손대지 않는다
+      "!**/src/features/archives/lab/experience"
     ]
   },
 

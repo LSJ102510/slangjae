@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    // 실험용 vendored 데모 코드(src/features/archives/lab)가 JS라 허용한다
+    "allowJs": true,
+    "checkJs": false,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM"],

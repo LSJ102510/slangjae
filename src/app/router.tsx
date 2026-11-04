@@ -6,6 +6,7 @@ import ScreenLayoutRoute, {
   type ScreenRouteHandle,
 } from "@/app/ScreenLayoutRoute";
 import ArchivesDetailScreen from "@/features/archives/ArchivesDetailScreen";
+import ArchivesLabScreen from "@/features/archives/ArchivesLabScreen";
 import ArchivesListScreen from "@/features/archives/ArchivesListScreen";
 import ArchivesPhotosScreen from "@/features/archives/ArchivesPhotosScreen";
 import ArchivesPhotoViewerScreen from "@/features/archives/ArchivesPhotoViewerScreen";
@@ -187,6 +188,8 @@ const routes = [
             // 아카이빙 화면은 모두 하단 탭 없이 흰 배경이라, element 없는 부모 라우트에 옵션을 모은다
             children: [
               { element: <ArchivesListScreen />, path: "/archives" },
+              // 실험용 3D 갤러리 — 디자인 비교용 임시 라우트
+              { element: <ArchivesLabScreen />, path: "/archives/lab" },
               {
                 element: <ArchivesDetailScreen />,
                 path: "/archives/:archiveId",
