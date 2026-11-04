@@ -1,59 +1,34 @@
-import {
-  type PointerEvent,
-  type TouchEvent,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
-import type { LabTimelineItem } from "@/features/archives/lab/types";
+import { type PointerEvent, type TouchEvent, useRef } from "react";
 
 interface ArchivesLabTimelineProps {
-  items: LabTimelineItem[];
+  count: number;
   activeIndex: number;
   onScrub: (index: number) => void;
 }
 
-// 오른쪽 가장자리의 세로 타임라인 — 카드마다 눈금, 연도가 바뀌는 자리에 연도 글자.
-// 위아래로 끌면 그 카드로 바로 간다(깊이 스크롤로 한 장씩 넘기기엔 먼 과거로 갈 때).
-// 연도 글자는 사진과 겹쳐서, 카드를 넘기거나 끄는 동안만 잠깐 보였다가 사라진다(사진 앱 스크러버처럼).
-const YEAR_LABEL_HIDE_DELAY = 1200;
+// 오른쪽 가장자리의 세로 타임라인 — 카드마다 눈금 하나(목차처럼 지금 몇 번째인지 보인다).
+// 위아래로 끌면 그 카드로 바로 간다(깊이 스크롤로 한 장씩 넘기기엔 멀리 갈 때).
+// 올해 행사만 보여 주는 화면이라 연도 글자는 두지 않는다.
 function ArchivesLabTimeline({
-  items,
+  count,
   activeIndex,
   onScrub,
 }: ArchivesLabTimelineProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
-  const activeYear = items[activeIndex]?.year;
-  const [isDragging, setIsDragging] = useState(false);
-  const [isRecentlyMoved, setIsRecentlyMoved] = useState(false);
-  const isShowingYears = isDragging || isRecentlyMoved;
-
-  // 활성 카드가 바뀔 때마다 연도 글자를 잠깐 띄운다
-  // biome-ignore lint/correctness/useExhaustiveDependencies: activeIndex가 바뀌는 순간에만 다시 띄운다
-  useEffect(() => {
-    setIsRecentlyMoved(true);
-    const timeoutId = window.setTimeout(
-      () => setIsRecentlyMoved(false),
-      YEAR_LABEL_HIDE_DELAY,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [activeIndex]);
 
   function scrubTo(clientY: number) {
     const track = trackRef.current;
-    if (!track || items.length < 2) {
+    if (!track || count < 2) {
       return;
     }
     const { top, height } = track.getBoundingClientRect();
     const ratio = Math.min(Math.max((clientY - top) / height, 0), 1);
-    onScrub(Math.round(ratio * (items.length - 1)));
+    onScrub(Math.round(ratio * (count - 1)));
   }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     isDraggingRef.current = true;
-    setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     scrubTo(event.clientY);
   }
@@ -66,7 +41,6 @@ function ArchivesLabTimeline({
 
   function handlePointerUp() {
     isDraggingRef.current = false;
-    setIsDragging(false);
   }
 
   // 갤러리(Scroll.js)는 window의 touchmove로 깊이 스크롤을 한다 — 여기서 끄는 손가락은 거기까지 가지 않게 막는다
@@ -88,7 +62,7 @@ function ArchivesLabTimeline({
         className="relative flex flex-col items-end justify-between"
         ref={trackRef}
       >
-        {items.map((item, index) => {
+        {Array.from({ length: count }, (_, index) => {
           const isActive = index === activeIndex;
           return (
             <div
@@ -96,15 +70,6 @@ function ArchivesLabTimeline({
               // biome-ignore lint/suspicious/noArrayIndexKey: 카드 순서가 바뀌지 않는 고정 목록이다
               key={index}
             >
-              {item.isYearStart && (
-                <span
-                  className={`absolute right-4 rounded-full bg-black/40 px-1.5 py-0.5 font-semibold text-xs tabular-nums backdrop-blur-sm transition-all duration-300 ${
-                    item.year === activeYear ? "text-white" : "text-white/45"
-                  } ${isShowingYears ? "opacity-100" : "translate-x-1 opacity-0"}`}
-                >
-                  {item.year}
-                </span>
-              )}
               <span
                 className={`block w-0.5 rounded-full transition-all duration-300 ${
                   isActive ? "h-4 bg-white" : "h-1 bg-white/40"

@@ -4,17 +4,17 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { fetchArchive } from "@/entities/archives/archivesApi";
 import ArchivesLabCaption from "@/features/archives/lab/ArchivesLabCaption";
+import ArchivesLabIntroBackground, {
+  LAB_INTRO_TOP_COLOR,
+} from "@/features/archives/lab/ArchivesLabIntroBackground";
 import ArchivesLabTimeline from "@/features/archives/lab/ArchivesLabTimeline";
 import { galleryPlaneData } from "@/features/archives/lab/experience/galleryData.js";
-import type {
-  LabActiveCard,
-  LabTimelineItem,
-} from "@/features/archives/lab/types";
+import type { LabActiveCard } from "@/features/archives/lab/types";
 
 // 실험용 화면 — houmahani/codrops-depth-gallery(MIT)의 Experience 코드를 가져와
 // 아카이빙 사진으로 돌려본 것이다. Figma에 없는 화면이고 비교용이라 라우트도 임시다(/archives/lab).
 // 원본 소스: https://github.com/houmahani/codrops-depth-gallery
-// 3D 장면(카드·배경·연도 글자)은 experience/가 그리고, 글자 UI(캡션·타임라인·진입 화면)는 여기서 그린다.
+// 3D 장면(카드·배경)은 experience/가 그리고, 글자 UI(캡션·타임라인·진입 화면)는 여기서 그린다.
 import "@/features/archives/lab/experience/canvas.css";
 import "@/features/archives/lab/lab.css";
 
@@ -124,13 +124,6 @@ function isLabPosition(state: unknown): state is LabPosition {
   );
 }
 
-const TIMELINE_ITEMS: LabTimelineItem[] = galleryPlaneData.map(
-  (plane, index) => ({
-    isYearStart: index === 0 || galleryPlaneData[index - 1].year !== plane.year,
-    year: plane.year,
-  }),
-);
-
 // 카드가 바뀌는 순간 손끝에 짧게 — 안드로이드만 지원하고 iOS 사파리는 vibrate가 없다
 function tick() {
   navigator.vibrate?.(8);
@@ -160,8 +153,11 @@ function ArchivesLabScreen() {
   // 폰 브라우저는 상태표시줄 색을 theme-color(Android Chrome)나 html 배경(iOS Safari)에서 가져온다.
   // 둘 다 없으면 흰색이라 화면 위에 흰 띠가 생긴다 — 이 화면에 있는 동안만 배경 셰이더의 위쪽 색을 따라 칠한다.
   // 색은 엔진이 바뀔 때마다 onTopColorChange로 알려 주고, 받기 전(로딩 중)에는 캔버스 바탕과 같은 검정이다.
+  // 진입 화면이 떠 있는 동안은 그 배경(포스터 파랑)을 쓰고, 엔진 색은 기억만 해 뒀다가 들어가면 칠한다.
   // 매번 state로 두면 색이 바뀔 때마다 화면 전체가 다시 렌더링되므로 DOM에 바로 쓴다.
   const themeColorMetaRef = useRef<HTMLMetaElement | null>(null);
+  const engineTopColorRef = useRef(LAB_INITIAL_TOP_COLOR);
+  const isEnteredRef = useRef(isEntered);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -176,7 +172,6 @@ function ArchivesLabScreen() {
       document.head.append(themeColorMeta);
     }
     themeColorMetaRef.current = themeColorMeta;
-    applyTopColor(themeColorMeta, LAB_INITIAL_TOP_COLOR);
 
     return () => {
       themeColorMetaRef.current = null;
@@ -188,6 +183,16 @@ function ArchivesLabScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    isEnteredRef.current = isEntered;
+    if (themeColorMetaRef.current) {
+      applyTopColor(
+        themeColorMetaRef.current,
+        isEntered ? engineTopColorRef.current : LAB_INTRO_TOP_COLOR,
+      );
+    }
+  }, [isEntered]);
 
   useEffect(() => {
     const container = canvasContainerRef.current;
@@ -224,7 +229,8 @@ function ArchivesLabScreen() {
         );
       },
       onTopColorChange: (hex) => {
-        if (themeColorMetaRef.current) {
+        engineTopColorRef.current = hex;
+        if (isEnteredRef.current && themeColorMetaRef.current) {
           applyTopColor(themeColorMetaRef.current, hex);
         }
       },
@@ -320,17 +326,17 @@ function ArchivesLabScreen() {
             <ArchivesLabCaption
               card={activeCard}
               onOpen={() => engineRef.current?.openActive("photos")}
-              totalCount={TIMELINE_ITEMS.length}
+              totalCount={galleryPlaneData.length}
             />
             <ArchivesLabTimeline
               activeIndex={activeCard.index}
-              items={TIMELINE_ITEMS}
+              count={galleryPlaneData.length}
               onScrub={(index) => engineRef.current?.scrollToIndex(index)}
             />
           </>
         )}
 
-        {/* 첫 카드에서만 — 위로 밀면 과거로 간다는 걸 알려 준다 */}
+        {/* 첫 카드에서만 — 위로 밀면 다음(이전 날짜) 행사로 간다는 걸 알려 준다 */}
         <div
           className={`absolute inset-x-0 bottom-0 flex flex-col items-center pb-6 text-white/50 text-xs transition-opacity duration-500 ${
             isEntered && activeCard?.index === 0 && !isOpening
@@ -340,7 +346,7 @@ function ArchivesLabScreen() {
         >
           <div className="lab-float flex flex-col items-center">
             <IconChevronUpSmall />
-            위로 밀어 지난 행사 · 옆으로 밀어 사진 넘기기
+            위로 밀어 다음 행사 · 옆으로 밀어 사진 넘기기
           </div>
           <div className="h-safe-bottom" />
         </div>
@@ -348,20 +354,21 @@ function ArchivesLabScreen() {
 
       {/* 진입 화면 — 들어가면 카드가 멀리서 날아온다 */}
       <div
-        className={`fixed inset-0 z-20 flex flex-col justify-end bg-linear-to-t from-black/90 via-black/40 to-black/10 px-6 text-white transition-opacity duration-700 ${
+        className={`fixed inset-0 z-20 flex flex-col justify-end px-6 text-white transition-opacity duration-700 ${
           isEntered ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
+        <ArchivesLabIntroBackground />
         <p className="font-semibold text-white/50 text-xs tracking-widest">
           STREAM ARCHIVE
         </p>
         <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight">
-          지난 행사의
+          올해 함께한
           <br />
           순간들
         </h1>
         <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
-          위로 밀어 시간을 거슬러 가 보세요.
+          위로 밀어 올해 행사를 하나씩 둘러보세요.
         </p>
         <button
           className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black transition-opacity disabled:opacity-40"

@@ -10,7 +10,7 @@ THREE.Cache.enabled = true
 
 class Engine {
   // callbacks — React 오버레이(캡션·타임라인)가 받는 이벤트
-  //   onActiveChange({ index, archiveId, label, year, photoIndex, photoCount, captionRect })
+  //   onActiveChange({ index, archiveId, label, photoIndex, photoCount, captionRect })
   //   onOpenStart(archiveId): 카드를 눌러 확대 연출이 시작될 때
   //   onTopColorChange(hex): 화면 위 가장자리 배경색이 바뀔 때 — 폰 상태표시줄을 같은 색으로 칠한다
   //   onOpen(archiveId, target): 확대 연출이 끝났을 때 — target은 'detail'(사진을 눌렀을 때, 행사 상세)
@@ -197,7 +197,6 @@ class Engine {
       label: userData.label,
       photoCount: userData.photos.length,
       photoIndex: userData.photoIndex,
-      year: userData.year,
     })
   }
 

@@ -50,17 +50,17 @@ class Gallery {
     this.photoIncomingOffset = 0.22
     this.photoOutgoingOffset = 0.32
 
-    // 연도가 바뀌는 카드 뒤에 띄우는 큰 연도 글자
-    this.yearMarkers = []
-    this.yearMarkerDepth = 1.2
-    // 흰 글자가 사진보다 튀지 않게 반투명으로 둔다
-    this.yearMarkerOpacity = 0.4
-    // 연도 글자 폭(화면 폭 대비)과 사진 위쪽 끝과의 간격(px)
-    // 캔버스를 글자 외곽에 딱 맞게 잘라서, 예전(여백 포함 0.96 / 0.6)과 같은 글자 크기가 되도록 줄인 값이다
-    this.yearMarkerWidthRatio = { mobile: 0.85, desktop: 0.53 }
-    // px — Tailwind 7단계(spacing × 7)
-    this.yearMarkerGap = 28
-    this.yearMarkerFont = '800 300px Pretendard, system-ui, sans-serif'
+    // 배경 색조 — 포스터(#1d3c8f) 파랑(0.6 부근)을 가운데 두고 카드마다 ±moodHueRange 안에서 고르게 퍼뜨린다
+    // (extractPalette). 0.08이면 청록빛 파랑(0.52)~남보라(0.68) 사이를 오간다.
+    // 사진 색조를 쓰지 않는 이유: 행사 사진은 대부분 따뜻한 색(사람·실내 조명)이라 파랑의 정반대 쪽이어서,
+    // 끌어당기면 전부 양 끝(보라 또는 청록)으로만 몰린다. 사진은 밝기·채도에만 반영한다.
+    this.moodHue = 0.6
+    this.moodHueRange = 0.08
+    // 기본 채도 — 회색조 사진이어도 파랗게 보이도록 바닥을 깔고, 사진 채도만큼 더 진해진다
+    this.moodSaturation = 0.4
+    this.moodSaturationKeep = 0.5
+    // 사진 밝기를 배경 밝기에 얼마나 반영할지 — 밝은 사진은 배경도 조금 밝게, 어두운 사진은 더 깊게
+    this.moodLightnessKeep = 0.8
 
     // Breath
     this.breathEnabled = true
@@ -82,8 +82,6 @@ class Gallery {
     if (this.isInitialized) return
 
     this.setPlanes(scene)
-    await this.loadYearMarkerFont()
-    this.setYearMarkers(scene)
     this.updatePlaneMaterialMode()
     this.updatePlaneScale()
     this.layoutPlanes()
@@ -102,7 +100,7 @@ class Gallery {
       const aspectRatio = this.cardAspectRatio
       const fallbackColor = plane.fallbackColor || '#ffffff'
       // 배경 무드는 사진에서 뽑는다 — 사진이 바뀌어도 손으로 색을 다시 고를 필요가 없다.
-      const palette = this.extractPalette(textureImage)
+      const palette = this.extractPalette(textureImage, index)
       const accentColor = palette?.blob1 || plane.accentColor || fallbackColor
       const backgroundColor = palette?.background || plane.backgroundColor || fallbackColor
       const blob1Color = palette?.blob1 || plane.blob1Color || fallbackColor
@@ -120,7 +118,6 @@ class Gallery {
       const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial)
       planeMesh.add(this.createShadowMesh(planeGeometry))
       planeMesh.userData.archiveId = plane.archiveId
-      planeMesh.userData.year = plane.year
       planeMesh.userData.photos = plane.photos?.length ? plane.photos : [plane.textureSrc]
       planeMesh.userData.photoIndex = 0
       planeMesh.userData.photoTransition = null
@@ -140,8 +137,14 @@ class Gallery {
 
   // 사진을 작게 줄여 픽셀을 훑고 배경·블롭 색 세 개를 고른다.
   // 배경은 평균색을 어둡게(글자가 늘 읽히게), 블롭1은 가장 채도 높은 색들, 블롭2는 어두운 쪽 평균이다.
-  extractPalette(image) {
+  // 색조는 진입 화면(이번 행사 포스터)의 파랑 쪽으로 끌어당긴다 — 사진 색은 파랑 안에서 약간의 차이로만 남아서,
+  // 넘길 때 카드마다 배경이 조금씩 달라지되 전체는 파란 계열로 묶인다.
+  extractPalette(image, index = 0) {
     if (!image || !image.width || !image.height) return null
+
+    // 황금비 간격으로 돌리면 이웃 카드끼리 색조가 늘 꽤 다르고, 장수가 늘어도 고르게 퍼진다(-1~1)
+    const hueSpread = ((index * 0.618034) % 1) * 2 - 1
+    const hue = (this.moodHue + hueSpread * this.moodHueRange + 1) % 1
 
     const sampleSize = 24
     const canvas = document.createElement('canvas')
@@ -181,7 +184,13 @@ class Gallery {
     const withLightness = (color, lightness, saturationScale = 1) => {
       const hsl = { h: 0, s: 0, l: 0 }
       color.getHSL(hsl)
-      return new THREE.Color().setHSL(hsl.h, Math.min(hsl.s * saturationScale, 0.85), lightness)
+      const saturation = Math.min(
+        this.moodSaturation + hsl.s * saturationScale * this.moodSaturationKeep,
+        0.85
+      )
+      // 행사 사진의 보통 밝기(0.4)를 기준으로 밝으면 키우고 어두우면 줄인다
+      const lightnessScale = 1 + (hsl.l - 0.4) * this.moodLightnessKeep
+      return new THREE.Color().setHSL(hue, saturation, lightness * lightnessScale)
     }
 
     const vivid = [...pixels]
@@ -194,9 +203,9 @@ class Gallery {
     const vividColor = vivid.length ? average(vivid) : overall
 
     return {
-      background: `#${withLightness(overall, 0.1, 1.2).getHexString()}`,
+      background: `#${withLightness(overall, 0.2, 1.2).getHexString()}`,
       blob1: `#${withLightness(vividColor, 0.5, 1.4).getHexString()}`,
-      blob2: `#${withLightness(average(dark), 0.28, 1.3).getHexString()}`,
+      blob2: `#${withLightness(average(dark), 0.3, 1.3).getHexString()}`,
     }
   }
 
@@ -255,99 +264,6 @@ class Gallery {
     shadowMesh.position.set(0, -0.08, -0.03)
     shadowMesh.userData.isShadow = true
     return shadowMesh
-  }
-
-  // Pretendard는 index.html에서 쓰는 글자·굵기만 그때그때 받는 dynamic subset이다.
-  // 굵기 800은 앱 다른 곳에서 안 써서, 미리 받아 두지 않으면 캔버스에 기본 폰트로 그려진다.
-  async loadYearMarkerFont() {
-    if (!document.fonts?.load) return
-    const years = [...new Set(this.planes.map((plane) => plane.userData.year).filter(Boolean))]
-    try {
-      await document.fonts.load(this.yearMarkerFont, years.join(''))
-    } catch (error) {
-      console.warn('Year marker font failed to load', error)
-    }
-  }
-
-  // 연도가 바뀌는 첫 카드 뒤에 큰 외곽선 연도 글자를 띄운다 — 깊이 축이 곧 타임라인이 된다.
-  setYearMarkers(scene) {
-    let previousYear = null
-
-    this.planes.forEach((plane, index) => {
-      const { year } = plane.userData
-      if (!year || year === previousYear) return
-      previousYear = year
-
-      // 캔버스를 글자 외곽에 딱 맞게 잘라야 메시 아래 끝 = 글자 아래 끝이 돼서 사진과의 간격을 정확히 잡을 수 있다
-      const font = this.yearMarkerFont
-      const padding = 8
-      const canvas = document.createElement('canvas')
-      const measureContext = canvas.getContext('2d')
-      measureContext.font = font
-      const metrics = measureContext.measureText(year)
-      canvas.width = Math.ceil(metrics.width) + padding * 2
-      canvas.height =
-        Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + padding * 2
-      const context = canvas.getContext('2d')
-      context.font = font
-      context.textAlign = 'center'
-      context.textBaseline = 'alphabetic'
-      context.fillStyle = '#ffffff'
-      context.fillText(year, canvas.width / 2, padding + metrics.actualBoundingBoxAscent)
-
-      const texture = new THREE.CanvasTexture(canvas)
-      texture.colorSpace = THREE.SRGBColorSpace
-      const marker = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, canvas.height / canvas.width),
-        new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          depthWrite: false,
-          opacity: 0,
-        })
-      )
-      marker.userData.planeIndex = index
-      marker.userData.heightRatio = canvas.height / canvas.width
-      scene.add(marker)
-      this.yearMarkers.push(marker)
-    })
-  }
-
-  // 연도 글자는 그 연도의 첫 카드에 멈춰 있을 때 가장 진하고, 멀어지면 사라진다.
-  updateYearMarkers(cameraZ) {
-    const isMobileViewport = this.viewportWidth <= this.mobileBreakpoint
-    const viewportAspect = Math.max(this.viewportWidth / this.viewportHeight, 0.0001)
-    const distance = 5 + this.yearMarkerDepth
-    const visibleHeight = 2 * Math.tan((45 * Math.PI) / 360) * distance
-    const visibleWidth = visibleHeight * viewportAspect
-    const width = Math.min(
-      visibleWidth *
-        (isMobileViewport ? this.yearMarkerWidthRatio.mobile : this.yearMarkerWidthRatio.desktop),
-      6
-    )
-    // 글자 평면은 카드보다 yearMarkerDepth만큼 뒤에 있어서, 같은 화면 높이로 보이려면 거리 비율만큼 키워 잡아야 한다
-    const depthScale = distance / 5
-    const unitsPerPixel = visibleHeight / this.viewportHeight
-
-    this.yearMarkers.forEach((marker) => {
-      const plane = this.planes[marker.userData.planeIndex]
-      const planeZ = -marker.userData.planeIndex * this.planeGap
-      const restCameraZ = planeZ + 5
-      const closeness = 1 - Math.min(Math.abs(cameraZ - restCameraZ) / this.planeGap, 1)
-      const targetOpacity = THREE.MathUtils.smoothstep(closeness, 0.2, 1) * this.yearMarkerOpacity
-
-      // 사진 위쪽 끝에서 yearMarkerGap(px)만큼 띄워 그 위에 올린다
-      const cardHalfHeight = this.getViewportFitScale(plane?.userData.aspectRatio || 1) * 1.5
-      const markerHeight = width * (marker.userData.heightRatio || 0.3)
-      const markerBottom = cardHalfHeight * depthScale + this.yearMarkerGap * unitsPerPixel
-      marker.scale.set(width, width, 1)
-      marker.position.set(
-        0,
-        markerBottom + markerHeight * 0.5,
-        planeZ - this.yearMarkerDepth
-      )
-      marker.material.opacity = THREE.MathUtils.lerp(marker.material.opacity, targetOpacity, 0.12)
-    })
   }
 
   // 활성 카드의 사진을 앞뒤로 넘긴다. 넘긴 방향으로 살짝 밀려났다가 제자리로 돌아온다.
@@ -849,7 +765,6 @@ class Gallery {
     if (!Number.isFinite(cameraZ)) return
     this.updatePlaneVisibility(cameraZ)
     this.updatePlaneMotion(scroll)
-    this.updateYearMarkers(cameraZ)
   }
 
   dispose() {
@@ -864,12 +779,6 @@ class Gallery {
     this.alphaMapsByAspect.forEach((texture) => texture.dispose())
     this.alphaMapsByAspect.clear()
     this.shadowTexture?.dispose()
-    this.yearMarkers.forEach((marker) => {
-      marker.material.map?.dispose()
-      marker.material.dispose()
-      marker.geometry.dispose()
-    })
-    this.yearMarkers = []
   }
 }
 
