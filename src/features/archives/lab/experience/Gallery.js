@@ -100,7 +100,8 @@ class Gallery {
       const aspectRatio = this.cardAspectRatio
       const fallbackColor = plane.fallbackColor || '#ffffff'
       // 배경 무드는 사진에서 뽑는다 — 사진이 바뀌어도 손으로 색을 다시 고를 필요가 없다.
-      const palette = this.extractPalette(textureImage, index)
+      // 색 순서는 뒤집는다 — 맨 마지막 카드의 색으로 시작해서 거꾸로 차례대로 바뀐다
+      const palette = this.extractPalette(textureImage, this.planeConfig.length - 1 - index)
       const accentColor = palette?.blob1 || plane.accentColor || fallbackColor
       const backgroundColor = palette?.background || plane.backgroundColor || fallbackColor
       const blob1Color = palette?.blob1 || plane.blob1Color || fallbackColor
