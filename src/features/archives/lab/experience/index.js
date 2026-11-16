@@ -25,10 +25,6 @@ class Experience {
     await this.gallery.init(scene)
     this.background.init()
     this.trailController.init(scene, camera)
-    // 궤적 선은 마우스를 따라 그리는 데스크톱 연출이라, 폰에서는 화면 아래에 점만 남아 지저분하다
-    if (window.innerWidth <= this.gallery.mobileBreakpoint) {
-      this.trailController.configuration.isEnabled = false
-    }
 
     const initialPlaneBlendData = this.gallery.getPlaneBlendData(camera.position.z)
     this.updateFrameTextTone(initialPlaneBlendData)

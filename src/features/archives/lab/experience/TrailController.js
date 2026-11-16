@@ -23,15 +23,20 @@ class TrailController {
         horizontalCycles: 1.85, // Number of horizontal waves
         verticalAmplitude: 0.78, // How much the path moves up/down
         verticalCycles: 2.1, // Number of vertical waves
-        distanceAheadOfCamera: 1.65, // Base forward offset from camera
-        baseDepthOffset: 4.78, // Base depth subtraction
-        depthSpan: 6.52, // Extra depth across full progress
-        progressDepthOffset: -0.1, // Bias so trail appears earlier at start
+        // 궤적 머리의 깊이(카메라에서 앞쪽으로 떨어진 거리). 활성 카드는 카메라에서 5만큼 앞에 있다.
+        // 원본은 스크롤할수록 점점 멀어져서 금방 카드 뒤로만 지나갔다 — 일정 거리를 중심으로 앞뒤로
+        // 오가게 바꿔서, 카드 앞(가까이)과 뒤(멀리)를 번갈아 지나간다(2.0 ~ 6.4).
+        depthCenter: 4.2,
+        depthSwing: 2.2,
+        depthCycles: 1.3,
       },
       responsiveSettings: {
         mobileBreakpoint: 768, // Mobile viewport limit in pixels.
-        mobileWidthScale: 0.35, // Horizontal width multiplier on mobile.
-        mobileStartXOffset: 0.35, // Extra X offset applied on mobile.
+        // 폰은 세로로 길어 보이는 폭이 좁다 — 궤적을 화면 가운데로 모으고(startX -0.96 + 0.96 = 0) 좌우 폭을 줄인다
+        mobileWidthScale: 0.22, // Horizontal width multiplier on mobile.
+        mobileStartXOffset: 0.96, // Extra X offset applied on mobile.
+        // 원본 위치(startY -1.05)는 화면 아래 끝이라 폰에서는 점만 남았다 — 위로 올려 사진 높이를 지나가게 한다
+        mobileStartYOffset: 0.8,
       },
       pointSettings: {
         minimumPointCount: 14, // Trail length near start
@@ -237,22 +242,23 @@ class TrailController {
     const responsiveHorizontalWidth =
       pathSettings.horizontalWidth * (isMobileViewport ? responsiveSettings.mobileWidthScale : 1)
 
+    const responsiveStartYPosition =
+      pathSettings.startYPosition + (isMobileViewport ? responsiveSettings.mobileStartYOffset : 0)
+
     const xPosition =
       responsiveStartXPosition +
       Math.sin(clampedProgress * FULL_CIRCLE_RADIANS * horizontalCycles) * responsiveHorizontalWidth
 
     const yPosition =
-      pathSettings.startYPosition +
+      responsiveStartYPosition +
       Math.sin(clampedProgress * FULL_CIRCLE_RADIANS * verticalCycles) *
         pathSettings.verticalAmplitude
 
-    const depthProgress =
-      pathSettings.progressDepthOffset + clampedProgress * (1 - pathSettings.progressDepthOffset)
-
     const zPosition =
-      cameraZ +
-      pathSettings.distanceAheadOfCamera -
-      (pathSettings.baseDepthOffset + depthProgress * pathSettings.depthSpan)
+      cameraZ -
+      (pathSettings.depthCenter +
+        Math.sin(clampedProgress * FULL_CIRCLE_RADIANS * pathSettings.depthCycles) *
+          pathSettings.depthSwing)
 
     this.trailHeadPosition.set(xPosition, yPosition, zPosition)
     return this.trailHeadPosition
