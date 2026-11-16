@@ -39,7 +39,7 @@ class Gallery {
 
     // 카드 모양 — 둥근 모서리와 바닥 그림자(인화한 사진처럼)
     this.cornerRadiusRatio = 0.045
-    this.shadowOpacity = 0.55
+    this.shadowOpacity = 0.5
     this.alphaMapsByAspect = new Map()
     this.shadowTexture = null
 
@@ -234,18 +234,27 @@ class Gallery {
   }
 
   // 카드 뒤에 깔리는 흐린 그림자 — 카드의 자식이라 크기·위치를 그대로 따라간다.
+  // 예전에는 검은 사각형을 그리고 그 둘레에만 blur를 줘서, 각진 사각형이 둥근 카드 모서리 밖으로 삐져나왔다.
+  // 이제 둥근 사각형을 캔버스 밖에 그리고 shadowOffset으로 그림자만 캔버스 안에 떨어뜨려, 흐린 부분만 남긴다.
   createShadowMesh(planeGeometry) {
     if (!this.shadowTexture) {
       const size = 256
-      const inset = 34
+      // 그림자 몸통은 카드보다 조금 작게(카드 대비 약 94%) 둬서, 둘레로 번지는 흐린 부분만 카드 밖에 보이게 한다
+      const inset = 48
+      const radius = 18
+      const blur = 40
+      const offscreen = size * 2
       const canvas = document.createElement('canvas')
       canvas.width = size
       canvas.height = size
       const context = canvas.getContext('2d')
       context.shadowColor = 'rgba(0, 0, 0, 1)'
-      context.shadowBlur = 28
-      context.fillStyle = 'rgba(0, 0, 0, 0.9)'
-      context.fillRect(inset, inset, size - inset * 2, size - inset * 2)
+      context.shadowBlur = blur
+      context.shadowOffsetX = offscreen
+      context.fillStyle = '#000000'
+      context.beginPath()
+      context.roundRect(inset - offscreen, inset, size - inset * 2, size - inset * 2, radius)
+      context.fill()
       this.shadowTexture = new THREE.CanvasTexture(canvas)
     }
 
@@ -259,9 +268,9 @@ class Gallery {
         opacity: 0,
       })
     )
-    // 그림자 텍스처의 안쪽 사각형이 카드보다 살짝 크게, 조금 아래로 떨어지게 둔다
-    shadowMesh.scale.set(1.36, 1.36, 1)
-    shadowMesh.position.set(0, -0.08, -0.03)
+    // 흐린 둘레까지 담기게 카드보다 크게 펴고, 빛이 위에서 오는 것처럼 조금 아래로 떨어뜨린다
+    shadowMesh.scale.set(1.5, 1.5, 1)
+    shadowMesh.position.set(0, -0.12, -0.03)
     shadowMesh.userData.isShadow = true
     return shadowMesh
   }
