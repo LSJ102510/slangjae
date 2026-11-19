@@ -392,14 +392,6 @@ function ArchivesLabConstellation({
                       y2={hub.y}
                     />
                   ))}
-                  <circle
-                    cx={overview.center.x}
-                    cy={overview.center.y}
-                    fill="none"
-                    r={5}
-                    stroke="white"
-                    strokeWidth={1.2}
-                  />
                   {overview.hubs.map((hub, index) => {
                     const color = lighten(eventColor(index), 0.45);
                     return (
@@ -629,9 +621,9 @@ function ArchivesLabConstellation({
           ref={outroRef}
         >
           <h2 className="pt-16 font-bold text-3xl leading-tight tracking-tight">
-            올해를 함께 울려 줘서
+            올해를 함께 울려 주셔서
             <br />
-            고마워요
+            감사합니다
           </h2>
           <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
             내년의 울림도 함께 만들어요.
