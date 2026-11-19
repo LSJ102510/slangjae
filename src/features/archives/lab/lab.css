@@ -80,7 +80,8 @@
 
   .lab-slide-up {
     /* 처음부터 빠르게 올라오다 끝에서 길게 늦춰 멈춘다(지수 감속) — 밀던 손의 속도를 이어받는 느낌 */
-    animation: lab-slide-up 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    /* 끝난 뒤 transform이 남으면 안의 고정 요소(위 막대·목차)가 페이지와 같이 스크롤돼서 backwards로 둔다 */
+    animation: lab-slide-up 900ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
   }
 }
 

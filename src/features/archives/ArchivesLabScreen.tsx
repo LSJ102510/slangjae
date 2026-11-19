@@ -50,9 +50,11 @@ interface LabEngineCallbacks {
 // 엔진이 첫 색을 알려 주기 전 상태표시줄 색 — 캔버스 바탕(bg-black)과 같다
 const LAB_INITIAL_TOP_COLOR = "#000000";
 
+// iOS 사파리는 버전에 따라 theme-color, html·body 배경, 가장자리 고정 요소 중 하나에서 막대 색을 뽑아서 셋 다 맞춘다
 function applyTopColor(themeColorMeta: HTMLMetaElement, hex: string) {
   themeColorMeta.content = hex;
   document.documentElement.style.backgroundColor = hex;
+  document.body.style.backgroundColor = hex;
 }
 
 // 사진·앨범을 열어 상세나 현장 사진 화면으로 갈 때 엔진을 캔버스째 여기 맡겨 두고, 돌아오면 그대로 다시 붙인다.
@@ -228,6 +230,7 @@ function ArchivesLabScreen() {
   useEffect(() => {
     const root = document.documentElement;
     const previousRootBackground = root.style.backgroundColor;
+    const previousBodyBackground = document.body.style.backgroundColor;
     const existingMeta = document.querySelector<HTMLMetaElement>(
       'meta[name="theme-color"]',
     );
@@ -242,6 +245,7 @@ function ArchivesLabScreen() {
     return () => {
       themeColorMetaRef.current = null;
       root.style.backgroundColor = previousRootBackground;
+      document.body.style.backgroundColor = previousBodyBackground;
       if (previousThemeColor === null) {
         themeColorMeta.remove();
       } else {

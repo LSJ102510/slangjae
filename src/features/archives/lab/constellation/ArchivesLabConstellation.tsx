@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { fetchArchive } from "@/entities/archives/archivesApi";
 import type { ArchiveDetail } from "@/entities/archives/types";
@@ -93,6 +94,18 @@ function twinkleStyle(hubIndex: number, spokeIndex: number): CSSProperties {
   };
 }
 
+// 배경색이 바뀌기 시작한 뒤 위아래 막대 색을 바꾸기까지 — 배경 전환(0.7초)이 막 시작된 즈음(아이폰에서 맞춰 봤다)
+const BAR_COLOR_DELAY_MS = 130;
+
+// 페이지 맨 위에서부터 요소 윗변까지의 거리. 별자리가 아래에서 올라오는 동안(transform)에도 흔들리지 않게
+// 화면 위치가 아니라 배치 위치(offsetTop)를 더해 구한다
+function pageTop(element: HTMLElement): number {
+  const parent = element.offsetParent;
+  return (
+    element.offsetTop + (parent instanceof HTMLElement ? pageTop(parent) : 0)
+  );
+}
+
 // 허브 아래 이름이 옆 허브와 겹치지 않게 짧게 자른다
 function shortTitle(title: string) {
   return title.length > 11 ? `${title.slice(0, 10)}…` : title;
@@ -110,7 +123,6 @@ function ArchivesLabConstellation({
   onColorChange,
   onOpenAlbum,
 }: ArchivesLabConstellationProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const outroRef = useRef<HTMLElement>(null);
@@ -235,20 +247,36 @@ function ArchivesLabConstellation({
     return () => observer.disconnect();
   }, []);
 
+  // 별자리는 화면 안 상자가 아니라 페이지 전체가 스크롤된다 — iOS 사파리가 스크롤할 때마다 위아래 막대 색을
+  // 지금 배경색으로 다시 뽑고, 스크롤하면 막대가 작아지는 사파리 기본 동작도 그대로 난다.
+  // 그동안 갤러리 화면(#root)은 숨겨 두고, 별자리는 body에 바로 붙인다(portal)
+  useLayoutEffect(() => {
+    const root = document.getElementById("root");
+    const previousDisplay = root?.style.display ?? "";
+    if (root) {
+      root.style.display = "none";
+    }
+    window.scrollTo(0, 0);
+    return () => {
+      if (root) {
+        root.style.display = previousDisplay;
+      }
+      window.scrollTo(0, 0);
+    };
+  }, []);
+
   // 화면 가운데를 지나고 있는 행사 구역 — 배경색·번호·목차와 별의 초록 선을 정한다
   const updateActive = useCallback(() => {
     frameRef.current = null;
-    const scroller = scrollRef.current;
-    if (!scroller) {
-      return;
-    }
-    const line = scroller.scrollTop + scroller.clientHeight * 0.5;
-    const outroTop = outroRef.current?.offsetTop ?? Number.POSITIVE_INFINITY;
+    const line = window.scrollY + window.innerHeight * 0.5;
+    const outroTop = outroRef.current
+      ? pageTop(outroRef.current)
+      : Number.POSITIVE_INFINITY;
     let next = -1;
     setIsOutro(line >= outroTop);
     if (line < outroTop) {
       sectionRefs.current.forEach((section, index) => {
-        if (section && section.offsetTop <= line) {
+        if (section && pageTop(section) <= line) {
           next = index;
         }
       });
@@ -256,31 +284,32 @@ function ArchivesLabConstellation({
     setActiveIndex(next);
   }, []);
 
-  function handleScroll() {
-    if (frameRef.current === null) {
-      frameRef.current = requestAnimationFrame(updateActive);
-    }
-  }
-
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const handleScroll = () => {
+      if (frameRef.current === null) {
+        frameRef.current = requestAnimationFrame(updateActive);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current);
+        // 비워 두지 않으면 다시 붙었을 때(개발 모드의 이중 실행 등) 스크롤해도 다시 계산하지 않는다
+        frameRef.current = null;
       }
-    },
-    [],
-  );
+    };
+  }, [updateActive]);
 
   // 참고 화면의 목차 링크처럼 그 행사 구역으로 곧장 옮긴다. 주소 끝에 #event-n을 남겨서
   // 그 주소로 들어오면 이 행사에서 시작한다(ArchivesLabScreen)
   const jumpToEvent = useCallback(
     (index: number) => {
-      const scroller = scrollRef.current;
       const section = sectionRefs.current[index];
-      if (!scroller || !section) {
+      if (!section) {
         return;
       }
-      scroller.scrollTop = section.offsetTop;
+      window.scrollTo({ behavior: "instant", top: pageTop(section) });
       window.history.replaceState(
         window.history.state,
         "",
@@ -303,8 +332,8 @@ function ArchivesLabConstellation({
     }
     hasRestoredRef.current = true;
     const section = sectionRefs.current[initialIndex];
-    if (scrollRef.current && section) {
-      scrollRef.current.scrollTop = section.offsetTop;
+    if (section) {
+      window.scrollTo({ behavior: "instant", top: pageTop(section) });
       updateActive();
     }
   }, [details, initialIndex, updateActive]);
@@ -314,9 +343,8 @@ function ArchivesLabConstellation({
   // 뒤로가기 — 행사 구역이나 맺음 화면을 보고 있으면 먼저 첫 화면(올해의 울림)으로 올라가고,
   // 첫 화면에서 누르면 별자리를 닫는다
   function handleBack() {
-    const scroller = scrollRef.current;
-    if (scroller && scroller.scrollTop > 0) {
-      scroller.scrollTo({ behavior: "smooth", top: 0 });
+    if (window.scrollY > 0) {
+      window.scrollTo({ behavior: "smooth", top: 0 });
       if (window.location.hash) {
         window.history.replaceState(
           window.history.state,
@@ -337,321 +365,336 @@ function ArchivesLabConstellation({
 
   // iOS 사파리는 도구 막대 색을 화면에서 뽑아 두고 배경이 바뀌어도 늦게(때로는 안) 따라온다 —
   // 바뀔 때마다 직접 알려서 지금 색으로 맞춘다
+  // 배경은 0.7초에 걸쳐 바뀌는데 막대는 한 번에 바뀌어서, 배경이 절반쯤 바뀌었을 때 막대를 바꿔 같이 가 보이게 한다
+  const [barColor, setBarColor] = useState(backgroundColor);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(
+      () => setBarColor(backgroundColor),
+      BAR_COLOR_DELAY_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [backgroundColor]);
   const onColorChangeRef = useRef(onColorChange);
   onColorChangeRef.current = onColorChange;
   useEffect(() => {
-    onColorChangeRef.current(backgroundColor);
-  }, [backgroundColor]);
+    onColorChangeRef.current(barColor);
+  }, [barColor]);
 
-  return (
+  return createPortal(
     <div
-      className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700`}
+      className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} relative z-[25] min-h-dvh text-white transition-colors duration-700`}
       style={{ backgroundColor }}
     >
+      {/* iOS 사파리(26~)는 상태표시줄·도구 막대 색을 화면 위아래 가장자리 가운데에서 맨 위에 있는 고정 요소의
+          배경색으로 정한다. 위쪽 뒤로가기 막대(투명)가 그 자리를 덮으면 예전에 뽑은 색이 남아서, 지금 배경색 띠를
+          가장 위(z-60)에 깔고 색이 바뀔 때마다 새로 붙여(key) 다시 읽게 한다 */}
       <div
-        className="scrollbar-hidden absolute inset-0 overflow-y-auto overscroll-contain"
-        onScroll={handleScroll}
-        ref={scrollRef}
-      >
-        {/* 첫 화면 — 제목 아래 포스터 파랑 위에 행사 별자리 — 행사마다 그 행사 구역의 색으로 칠한다. 허브를 누르면 그 행사로 간다 */}
-        <section className="flex h-svh flex-col px-4 pt-safe-top pb-4">
-          <div className="px-2 pt-16 pb-5 text-center">
-            <h2 className="font-bold text-[52px] leading-none tracking-tight min-[769px]:text-7xl">
-              올해의 울림
-            </h2>
-            {/* 제목 아래 이번 학생회 임기 */}
-            <p className="mt-3 font-medium text-base text-white/80 tabular-nums">
-              2025.11 ~ 2026.11
-            </p>
-          </div>
-          <div
-            className="relative min-h-0 flex-1 overflow-hidden"
-            ref={panelRef}
-          >
-            {overview && (
-              <>
-                <svg
-                  aria-hidden="true"
-                  className="absolute inset-0"
-                  height={overview.height}
-                  role="presentation"
-                  width={overview.width}
-                >
-                  {overview.crossLinks.map(([from, to], linkIndex) => (
-                    <line
-                      // biome-ignore lint/suspicious/noArrayIndexKey: 배치에서 정해진 순서 그대로다
-                      key={linkIndex}
-                      stroke="white"
-                      strokeOpacity={0.1}
-                      strokeWidth={0.6}
-                      x1={from.x}
-                      x2={to.x}
-                      y1={from.y}
-                      y2={to.y}
-                    />
-                  ))}
-                  {overview.hubs.map((hub, index) => (
-                    <line
-                      // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                      key={index}
-                      stroke="white"
-                      strokeOpacity={0.22}
-                      strokeWidth={1}
-                      x1={overview.center.x}
-                      x2={hub.x}
-                      y1={overview.center.y}
-                      y2={hub.y}
-                    />
-                  ))}
-                  {overview.hubs.map((hub, index) => {
-                    const color = lighten(eventColor(index), 0.45);
-                    return (
-                      <g
-                        className="lab-star-drift"
-                        // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                        key={index}
-                        style={{
-                          animationDelay: `${-index * 1.7}s`,
-                          transformOrigin: `${hub.x}px ${hub.y}px`,
-                        }}
-                      >
-                        {/* 행사 별처럼 선 한 가닥마다 허브를 축으로 제각각 흔들리고, 끝 점은 은은하게 반짝인다.
-                            가끔 허브에서 끝 점으로 초록 선만 그어졌다 사라지고(끝에 원은 달지 않는다),
-                            아무 때나 행사 몇 개가 불꽃처럼 터진다 */}
-                        {hub.spokes.map((spoke, spokeIndex) => {
-                          const pulseTip =
-                            pulses[index]?.tips.indexOf(spokeIndex) ?? -1;
-                          return (
-                            <g
-                              className="lab-star-sway"
-                              // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
-                              key={spokeIndex}
-                              style={swayStyle(index, spokeIndex, hub)}
-                            >
-                              <line
-                                stroke={color}
-                                strokeOpacity={0.5}
-                                strokeWidth={1}
-                                x1={hub.x}
-                                x2={spoke.x}
-                                y1={hub.y}
-                                y2={spoke.y}
-                              />
-                              <circle
-                                className="lab-twinkle"
-                                cx={spoke.x}
-                                cy={spoke.y}
-                                fill={spokeIndex % 6 === 3 ? "white" : color}
-                                r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
-                                style={twinkleStyle(index, spokeIndex)}
-                              />
-                              {pulseTip >= 0 && (
-                                <g
-                                  className="lab-star-pulse"
-                                  key={pulses[index]?.key}
-                                >
-                                  <line
-                                    pathLength={1}
-                                    stroke="#8df0a8"
-                                    strokeWidth={1.4}
-                                    x1={hub.x}
-                                    x2={spoke.x}
-                                    y1={hub.y}
-                                    y2={spoke.y}
-                                  />
-                                </g>
-                              )}
-                            </g>
-                          );
-                        })}
-                        {bursts[index] !== undefined && (
-                          <g key={bursts[index]}>
-                            {hub.spokes.map((spoke, spokeIndex) => (
-                              <line
-                                className="lab-burst-trail"
-                                // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
-                                key={spokeIndex}
-                                pathLength={1}
-                                stroke={color}
-                                strokeLinecap="round"
-                                strokeWidth={1.6}
-                                style={{
-                                  animationDelay: `${(spokeIndex % 5) * 0.04}s`,
-                                }}
-                                x1={hub.x}
-                                x2={spoke.x}
-                                y1={hub.y}
-                                y2={spoke.y}
-                              />
-                            ))}
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
-                  {overview.hubs.map((hub, index) => (
-                    <g
-                      // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                      key={index}
-                    >
-                      <circle
-                        className="lab-hub-glow"
-                        cx={hub.x}
-                        cy={hub.y}
-                        fill={lighten(eventColor(index), 0.6)}
-                        r={10}
-                        style={{ animationDelay: `${-index * 0.9}s` }}
-                      />
-                      <circle
-                        cx={hub.x}
-                        cy={hub.y}
-                        fill={lighten(eventColor(index), 0.6)}
-                        r={4.5}
-                      />
-                      <text
-                        fill="white"
-                        fontWeight={500}
-                        fontSize={12}
-                        textAnchor="middle"
-                        x={hub.x}
-                        y={hub.y + 24}
-                      >
-                        {shortTitle(events[index].title)}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-                {/* 누르는 자리 — 허브와 그 아래 이름을 덮는다 */}
-                {overview.hubs.map((hub, index) => (
-                  <button
-                    aria-label={events[index].title}
-                    className="absolute size-16 -translate-x-1/2 -translate-y-1/2"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                    key={index}
-                    onClick={() => jumpToEvent(index)}
-                    style={{ left: hub.x, top: hub.y + 10 }}
-                    type="button"
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[max(env(safe-area-inset-top),12px)]"
+        key={`top-${barColor}`}
+        style={{ backgroundColor: barColor }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] h-[max(env(safe-area-inset-bottom),12px)]"
+        key={`bottom-${barColor}`}
+        style={{ backgroundColor: barColor }}
+      />
+      {/* 첫 화면 — 제목 아래 포스터 파랑 위에 행사 별자리 — 행사마다 그 행사 구역의 색으로 칠한다. 허브를 누르면 그 행사로 간다 */}
+      <section className="flex h-svh flex-col px-4 pt-safe-top pb-4">
+        <div className="px-2 pt-16 pb-5 text-center">
+          <h2 className="font-bold text-[52px] leading-none tracking-tight min-[769px]:text-7xl">
+            올해의 울림
+          </h2>
+          {/* 제목 아래 이번 학생회 임기 */}
+          <p className="mt-3 font-medium text-base text-white/80 tabular-nums">
+            2025.11 ~ 2026.11
+          </p>
+        </div>
+        <div className="relative min-h-0 flex-1 overflow-hidden" ref={panelRef}>
+          {overview && (
+            <>
+              <svg
+                aria-hidden="true"
+                className="absolute inset-0"
+                height={overview.height}
+                role="presentation"
+                width={overview.width}
+              >
+                {overview.crossLinks.map(([from, to], linkIndex) => (
+                  <line
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 배치에서 정해진 순서 그대로다
+                    key={linkIndex}
+                    stroke="white"
+                    strokeOpacity={0.1}
+                    strokeWidth={0.6}
+                    x1={from.x}
+                    x2={to.x}
+                    y1={from.y}
+                    y2={to.y}
                   />
                 ))}
-              </>
-            )}
-          </div>
-        </section>
-
-        {events.map((event, index) => {
-          const detail = details[event.archiveId];
-          const photos = detail?.photos.length ? detail.photos : event.photos;
-          return (
-            <section
-              // biome-ignore lint/suspicious/noArrayIndexKey: 목데이터는 같은 앨범을 여러 행사가 돌려 써서 id만으로는 겹친다
-              key={`${event.archiveId}-${index}`}
-              ref={(element) => {
-                sectionRefs.current[index] = element;
-              }}
-            >
-              {/* 행사 별 하나와 그 왼편의 큰 제목 */}
-              <div className="relative h-[58svh] overflow-hidden">
-                <ArchivesLabEventStar
-                  index={index}
-                  isActive={index === activeIndex}
-                />
-                {/* PC에서는 별 허브(가로 60% 자리) 바로 왼쪽까지 끌어온다(글은 왼쪽 정렬) — 별을 가리지 않으면서 가운데에 가깝게 */}
-                <div className="pointer-events-none absolute top-[52%] left-6 max-w-[66%] -translate-y-1/2 min-[769px]:right-[calc(40%+56px)] min-[769px]:left-auto min-[769px]:max-w-[46%]">
-                  <p className="font-medium text-sm text-white/65 tabular-nums">
-                    {String(index + 1).padStart(2, "0")} / {events.length} ·{" "}
-                    {event.date}
-                  </p>
-                  <h3 className="mt-2 break-keep font-bold text-[40px] leading-[1.08] tracking-tight">
-                    {event.title}
-                  </h3>
-                </div>
-              </div>
-
-              {/* 참고 화면의 기능 상자 — 바탕색이 비치는 옅은 상자에 제목·설명·고정폭 글자 버튼, 사진,
-                  그 아래 일시·장소·주관을 가는 선으로 나눈 줄로 단다. PC에서는 가운데에 둔다 */}
-              <div className="px-4 pb-24 min-[769px]:mx-auto min-[769px]:max-w-2xl">
-                <article className="border border-white/20 bg-white/10">
-                  <div className="px-6 pt-7 pb-6">
-                    <h4 className="break-keep font-medium text-[17px] leading-snug">
-                      {event.title}
-                    </h4>
-                    {detail?.activity && (
-                      <p className="mt-3 whitespace-pre-line break-keep text-[15px] text-white/75 leading-relaxed">
-                        {detail.activity}
-                      </p>
-                    )}
-                    <button
-                      className="mt-5 rounded-full bg-black/45 px-4 py-2 font-semibold text-sm text-white active:bg-black/60"
-                      onClick={() => onOpenAlbum(index, event.archiveId)}
-                      type="button"
+                {overview.hubs.map((hub, index) => (
+                  <line
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
+                    key={index}
+                    stroke="white"
+                    strokeOpacity={0.22}
+                    strokeWidth={1}
+                    x1={overview.center.x}
+                    x2={hub.x}
+                    y1={overview.center.y}
+                    y2={hub.y}
+                  />
+                ))}
+                {overview.hubs.map((hub, index) => {
+                  const color = lighten(eventColor(index), 0.45);
+                  return (
+                    <g
+                      className="lab-star-drift"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
+                      key={index}
+                      style={{
+                        animationDelay: `${-index * 1.7}s`,
+                        transformOrigin: `${hub.x}px ${hub.y}px`,
+                      }}
                     >
-                      앨범 열기 · {photos.length}장
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 px-6 pb-6">
-                    {photos.slice(0, 3).map((photo, photoIndex) => (
-                      <img
-                        alt=""
-                        className={`w-full object-cover ${
-                          photoIndex === 0
-                            ? "col-span-2 aspect-[4/3]"
-                            : "aspect-square"
-                        }`}
-                        // biome-ignore lint/suspicious/noArrayIndexKey: 같은 사진이 여러 번 들어 있을 수 있다(목데이터)
-                        key={photoIndex}
-                        loading="lazy"
-                        src={photo}
-                      />
-                    ))}
-                  </div>
-                  {detail && (
-                    <dl className="border-white/20 border-t">
-                      {[
-                        ["일시", detail.schedule],
-                        ["장소", detail.location],
-                        ["주관", detail.department],
-                      ].map(([label, value]) => (
-                        <div
-                          className="border-white/20 border-b px-6 py-4 last:border-b-0"
-                          key={label}
-                        >
-                          <dt className="text-sm text-white/55">{label}</dt>
-                          <dd className="mt-1.5 text-[16px]">{value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  )}
-                </article>
-              </div>
-            </section>
-          );
-        })}
+                      {/* 행사 별처럼 선 한 가닥마다 허브를 축으로 제각각 흔들리고, 끝 점은 은은하게 반짝인다.
+                            가끔 허브에서 끝 점으로 초록 선만 그어졌다 사라지고(끝에 원은 달지 않는다),
+                            아무 때나 행사 몇 개가 불꽃처럼 터진다 */}
+                      {hub.spokes.map((spoke, spokeIndex) => {
+                        const pulseTip =
+                          pulses[index]?.tips.indexOf(spokeIndex) ?? -1;
+                        return (
+                          <g
+                            className="lab-star-sway"
+                            // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
+                            key={spokeIndex}
+                            style={swayStyle(index, spokeIndex, hub)}
+                          >
+                            <line
+                              stroke={color}
+                              strokeOpacity={0.5}
+                              strokeWidth={1}
+                              x1={hub.x}
+                              x2={spoke.x}
+                              y1={hub.y}
+                              y2={spoke.y}
+                            />
+                            <circle
+                              className="lab-twinkle"
+                              cx={spoke.x}
+                              cy={spoke.y}
+                              fill={spokeIndex % 6 === 3 ? "white" : color}
+                              r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
+                              style={twinkleStyle(index, spokeIndex)}
+                            />
+                            {pulseTip >= 0 && (
+                              <g
+                                className="lab-star-pulse"
+                                key={pulses[index]?.key}
+                              >
+                                <line
+                                  pathLength={1}
+                                  stroke="#8df0a8"
+                                  strokeWidth={1.4}
+                                  x1={hub.x}
+                                  x2={spoke.x}
+                                  y1={hub.y}
+                                  y2={spoke.y}
+                                />
+                              </g>
+                            )}
+                          </g>
+                        );
+                      })}
+                      {bursts[index] !== undefined && (
+                        <g key={bursts[index]}>
+                          {hub.spokes.map((spoke, spokeIndex) => (
+                            <line
+                              className="lab-burst-trail"
+                              // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
+                              key={spokeIndex}
+                              pathLength={1}
+                              stroke={color}
+                              strokeLinecap="round"
+                              strokeWidth={1.6}
+                              style={{
+                                animationDelay: `${(spokeIndex % 5) * 0.04}s`,
+                              }}
+                              x1={hub.x}
+                              x2={spoke.x}
+                              y1={hub.y}
+                              y2={spoke.y}
+                            />
+                          ))}
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+                {overview.hubs.map((hub, index) => (
+                  <g
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
+                    key={index}
+                  >
+                    <circle
+                      className="lab-hub-glow"
+                      cx={hub.x}
+                      cy={hub.y}
+                      fill={lighten(eventColor(index), 0.6)}
+                      r={10}
+                      style={{ animationDelay: `${-index * 0.9}s` }}
+                    />
+                    <circle
+                      cx={hub.x}
+                      cy={hub.y}
+                      fill={lighten(eventColor(index), 0.6)}
+                      r={4.5}
+                    />
+                    <text
+                      fill="white"
+                      fontWeight={500}
+                      fontSize={12}
+                      textAnchor="middle"
+                      x={hub.x}
+                      y={hub.y + 24}
+                    >
+                      {shortTitle(events[index].title)}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+              {/* 누르는 자리 — 허브와 그 아래 이름을 덮는다 */}
+              {overview.hubs.map((hub, index) => (
+                <button
+                  aria-label={events[index].title}
+                  className="absolute size-16 -translate-x-1/2 -translate-y-1/2"
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
+                  key={index}
+                  onClick={() => jumpToEvent(index)}
+                  style={{ left: hub.x, top: hub.y + 10 }}
+                  type="button"
+                />
+              ))}
+            </>
+          )}
+        </div>
+      </section>
 
-        <section
-          className="flex h-svh flex-col px-6 pt-safe-top pb-6 min-[769px]:items-center min-[769px]:text-center"
-          ref={outroRef}
-        >
-          <h2 className="pt-16 font-bold text-3xl leading-tight tracking-tight">
-            올해를 함께 울려 주셔서
-            <br />
-            감사합니다
-          </h2>
-          <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
-            내년의 울림도 함께 만들어요.
-          </p>
-          <button
-            className="mt-auto h-14 rounded-full bg-white font-semibold text-base text-black min-[769px]:w-80"
-            onClick={onRestart}
-            type="button"
+      {events.map((event, index) => {
+        const detail = details[event.archiveId];
+        const photos = detail?.photos.length ? detail.photos : event.photos;
+        return (
+          <section
+            // biome-ignore lint/suspicious/noArrayIndexKey: 목데이터는 같은 앨범을 여러 행사가 돌려 써서 id만으로는 겹친다
+            key={`${event.archiveId}-${index}`}
+            ref={(element) => {
+              sectionRefs.current[index] = element;
+            }}
           >
-            처음으로
-          </button>
-          <div className="h-safe-bottom" />
-        </section>
-      </div>
+            {/* 행사 별 하나와 그 왼편의 큰 제목 */}
+            <div className="relative h-[58svh] overflow-hidden">
+              <ArchivesLabEventStar
+                index={index}
+                isActive={index === activeIndex}
+              />
+              {/* PC에서는 별 허브(가로 60% 자리) 바로 왼쪽까지 끌어온다(글은 왼쪽 정렬) — 별을 가리지 않으면서 가운데에 가깝게 */}
+              <div className="pointer-events-none absolute top-[52%] left-6 max-w-[66%] -translate-y-1/2 min-[769px]:right-[calc(40%+56px)] min-[769px]:left-auto min-[769px]:max-w-[46%]">
+                <p className="font-medium text-sm text-white/65 tabular-nums">
+                  {String(index + 1).padStart(2, "0")} / {events.length} ·{" "}
+                  {event.date}
+                </p>
+                <h3 className="mt-2 break-keep font-bold text-[40px] leading-[1.08] tracking-tight">
+                  {event.title}
+                </h3>
+              </div>
+            </div>
+
+            {/* 참고 화면의 기능 상자 — 바탕색이 비치는 옅은 상자에 제목·설명·고정폭 글자 버튼, 사진,
+                  그 아래 일시·장소·주관을 가는 선으로 나눈 줄로 단다. PC에서는 가운데에 둔다 */}
+            <div className="px-4 pb-24 min-[769px]:mx-auto min-[769px]:max-w-2xl">
+              <article className="border border-white/20 bg-white/10">
+                <div className="px-6 pt-7 pb-6">
+                  <h4 className="break-keep font-medium text-[17px] leading-snug">
+                    {event.title}
+                  </h4>
+                  {detail?.activity && (
+                    <p className="mt-3 whitespace-pre-line break-keep text-[15px] text-white/75 leading-relaxed">
+                      {detail.activity}
+                    </p>
+                  )}
+                  <button
+                    className="mt-5 rounded-full bg-black/45 px-4 py-2 font-semibold text-sm text-white active:bg-black/60"
+                    onClick={() => onOpenAlbum(index, event.archiveId)}
+                    type="button"
+                  >
+                    앨범 열기 · {photos.length}장
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 px-6 pb-6">
+                  {photos.slice(0, 3).map((photo, photoIndex) => (
+                    <img
+                      alt=""
+                      className={`w-full object-cover ${
+                        photoIndex === 0
+                          ? "col-span-2 aspect-[4/3]"
+                          : "aspect-square"
+                      }`}
+                      // biome-ignore lint/suspicious/noArrayIndexKey: 같은 사진이 여러 번 들어 있을 수 있다(목데이터)
+                      key={photoIndex}
+                      loading="lazy"
+                      src={photo}
+                    />
+                  ))}
+                </div>
+                {detail && (
+                  <dl className="border-white/20 border-t">
+                    {[
+                      ["일시", detail.schedule],
+                      ["장소", detail.location],
+                      ["주관", detail.department],
+                    ].map(([label, value]) => (
+                      <div
+                        className="border-white/20 border-b px-6 py-4 last:border-b-0"
+                        key={label}
+                      >
+                        <dt className="text-sm text-white/55">{label}</dt>
+                        <dd className="mt-1.5 text-[16px]">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </article>
+            </div>
+          </section>
+        );
+      })}
+
+      <section
+        className="flex h-svh flex-col px-6 pt-safe-top pb-6 min-[769px]:items-center min-[769px]:text-center"
+        ref={outroRef}
+      >
+        <h2 className="pt-16 font-bold text-3xl leading-tight tracking-tight">
+          올해를 함께 울려 주셔서
+          <br />
+          감사합니다
+        </h2>
+        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
+          내년의 울림도 함께 만들어요.
+        </p>
+        <button
+          className="mt-auto h-14 rounded-full bg-white font-semibold text-base text-black min-[769px]:w-80"
+          onClick={onRestart}
+          type="button"
+        >
+          처음으로
+        </button>
+        <div className="h-safe-bottom" />
+      </section>
 
       {/* 위 — 뒤로가기(handleBack)와 지금 행사 번호 */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 pt-safe-top">
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-10 pt-safe-top">
         <div className="flex h-14 items-center justify-between px-4">
           <button
             aria-label="뒤로가기"
@@ -672,7 +715,7 @@ function ArchivesLabConstellation({
       {/* 오른쪽 목차 — 행사 구역에서만. 누르면 그 행사로 간다 */}
       <nav
         aria-label="행사 목차"
-        className={`absolute top-1/2 right-1 flex -translate-y-1/2 flex-col transition-opacity ${
+        className={`fixed top-1/2 right-1 z-10 flex -translate-y-1/2 flex-col transition-opacity ${
           isInEvent ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -696,7 +739,8 @@ function ArchivesLabConstellation({
           </button>
         ))}
       </nav>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
