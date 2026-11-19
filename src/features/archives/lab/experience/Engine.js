@@ -14,6 +14,7 @@ class Engine {
   //   onOpenStart(archiveId): 카드를 눌러 확대 연출이 시작될 때
   //   onTopColorChange(hex): 화면 위 가장자리 배경색이 바뀔 때 — 폰 상태표시줄을 같은 색으로 칠한다
   //   onEndChange(isAtEnd): 마지막 카드를 지나 끝 화면 칸에 들어가거나 나올 때
+  //   onPhotoLoadingChange(isLoading): 옆으로 넘긴 사진을 아직 받는 중일 때 — 받으면 넘어간다
   //   onOpen(archiveId, target): 확대 연출이 끝났을 때 — target은 'photos'(앨범 열기 버튼, 현장 사진 모아보기).
   //                              사진 카드를 눌러 행사 상세로 가는 건 뺐다 — 세부 정보는 별자리 행사 구역에서 본다
   constructor(canvas, callbacks = {}) {
@@ -34,6 +35,10 @@ class Engine {
     this.lastTopColorHex = null
     this.animationFrameRequestId = null
     this.preloadedTextures = new Map()
+    this.pendingTextures = new Map()
+    this.textureLoader = new THREE.TextureLoader()
+    this.backgroundLoadConcurrency = 3
+    this.photoLoadingKey = null
     this.stats = null
     this.showFps = true
     this.isDebugUiVisible = false
@@ -123,15 +128,110 @@ class Engine {
     const lastIndex = gallery.planes.length - 1
     const safeIndex = THREE.MathUtils.clamp(index, 0, lastIndex)
     gallery.restorePhoto(safeIndex, photoIndex)
+    // 보던 사진을 아직 못 받았으면(대표 사진만 받은 상태) 받는 대로 바꿔 끼운다
+    const source = gallery.planes[safeIndex]?.userData.photos[photoIndex]
+    if (source && !gallery.hasTexture(source)) {
+      this.loadTexture(source).then(() => {
+        gallery.restorePhoto(safeIndex, photoIndex)
+        if (this.activeIndex === safeIndex) this.emitActive()
+      })
+    }
     this.scroll.jumpToIndex(safeIndex)
     gallery.updatePlaneVisibility(this.scroll.cameraZFromScroll(this.scroll.scrollCurrent), 1)
     this.enter({ skipIntro: true })
   }
 
+  // 넘길 사진을 아직 못 받았으면 지금 사진을 그대로 두고 받는 중임을 알린 뒤, 받자마자 넘긴다.
+  // 그사이 다른 카드로 가거나 다시 넘기면 이 넘김은 버린다
   shiftPhoto(direction) {
     if (this.isOpening || this.activeIndex < 0) return
-    const result = this.experience.gallery.shiftPhoto(this.activeIndex, direction)
+    const { gallery } = this.experience
+    const target = gallery.peekShift(this.activeIndex, direction)
+    if (!target) return
+    if (!gallery.hasTexture(target.source)) {
+      const planeIndex = this.activeIndex
+      const fromPhotoIndex = gallery.planes[planeIndex].userData.photoIndex
+      const key = `${planeIndex}:${target.nextPhotoIndex}`
+      this.setPhotoLoading(key)
+      this.loadTexture(target.source).then(() => {
+        if (this.photoLoadingKey !== key) return
+        this.setPhotoLoading(null)
+        const plane = gallery.planes[planeIndex]
+        if (this.activeIndex !== planeIndex || plane?.userData.photoIndex !== fromPhotoIndex) return
+        if (gallery.shiftPhoto(planeIndex, direction)) this.emitActive()
+      })
+      return
+    }
+    this.setPhotoLoading(null)
+    const result = gallery.shiftPhoto(this.activeIndex, direction)
     if (result) this.emitActive()
+  }
+
+  setPhotoLoading(key) {
+    const wasLoading = this.photoLoadingKey !== null
+    this.photoLoadingKey = key
+    if (wasLoading !== (key !== null)) this.callbacks.onPhotoLoadingChange?.(key !== null)
+  }
+
+  // 사진 한 장을 받아 갤러리에 넣는다. 같은 사진을 동시에 두 번 받지 않는다
+  loadTexture(source) {
+    const { gallery } = this.experience
+    if (!source || gallery.hasTexture(source)) return Promise.resolve()
+    const pending = this.pendingTextures.get(source)
+    if (pending) return pending
+    const promise = this.textureLoader
+      .loadAsync(source)
+      .then((texture) => {
+        if (this.isDisposed) {
+          texture.dispose()
+          return
+        }
+        texture.colorSpace = THREE.SRGBColorSpace
+        gallery.addTexture(source, texture)
+        this.preloadedTextures.set(source, texture)
+      })
+      .catch((error) => {
+        console.warn(`Texture failed to load: ${source}`, error)
+      })
+      .finally(() => {
+        this.pendingTextures.delete(source)
+      })
+    this.pendingTextures.set(source, promise)
+    return promise
+  }
+
+  // 들어간 뒤 현장 사진을 뒤에서 이어 받는다 — 보고 있는 카드의 다음 사진부터, 그다음 가까운 카드 순서로.
+  // 매번 지금 보는 카드를 기준으로 다음 사진을 고르니, 넘기는 쪽 사진이 먼저 온다
+  nextBackgroundSource() {
+    const { gallery } = this.experience
+    const { planes } = gallery
+    const center = Math.max(this.activeIndex, 0)
+    const order = [center]
+    for (let distance = 1; distance < planes.length; distance += 1) {
+      if (center + distance < planes.length) order.push(center + distance)
+      if (center - distance >= 0) order.push(center - distance)
+    }
+    for (const planeIndex of order) {
+      const { photos, photoIndex } = planes[planeIndex].userData
+      for (let step = 1; step <= photos.length; step += 1) {
+        const source = photos[(photoIndex + step) % photos.length]
+        if (source && !gallery.hasTexture(source) && !this.pendingTextures.has(source)) {
+          return source
+        }
+      }
+    }
+    return null
+  }
+
+  startBackgroundLoading() {
+    const worker = async () => {
+      while (!this.isDisposed) {
+        const source = this.nextBackgroundSource()
+        if (!source) return
+        await this.loadTexture(source)
+      }
+    }
+    for (let index = 0; index < this.backgroundLoadConcurrency; index += 1) worker()
   }
 
   openActive(target = 'photos') {
@@ -203,6 +303,8 @@ class Engine {
       captionRect &&
       `${captionRect.left},${captionRect.top},${captionRect.width}` !== this.lastCaptionKey
     if (nextIndex === this.activeIndex && !captionChanged) return
+    // 다른 카드로 가면 받던 사진으로 넘기는 건 버린다
+    if (nextIndex !== this.activeIndex) this.setPhotoLoading(null)
     this.activeIndex = nextIndex
     this.emitActive()
   }
@@ -258,6 +360,7 @@ class Engine {
 
       this.isInitialized = true
       this.start()
+      this.startBackgroundLoading()
     } finally {
       document.body.classList.remove('loading')
     }

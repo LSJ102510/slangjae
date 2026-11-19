@@ -7,6 +7,8 @@ import type { LabActiveCard } from "@/features/archives/lab/types";
 
 interface ArchivesLabCaptionProps {
   card: LabActiveCard;
+  /** 넘긴 사진을 아직 받는 중 — 사진 번호 옆에 작게 돈다 */
+  isPhotoLoading: boolean;
   totalCount: number;
   onOpen: () => void;
   onShiftPhoto: (direction: 1 | -1) => void;
@@ -19,6 +21,7 @@ interface ArchivesLabCaptionProps {
 // 좌우 여백(Gallery.mobileSidePadding)도 사진과 같이 따라온다. 여기서 따로 여백을 두지 않는다.
 function ArchivesLabCaption({
   card,
+  isPhotoLoading,
   totalCount,
   onOpen,
   onShiftPhoto,
@@ -55,6 +58,13 @@ function ArchivesLabCaption({
               >
                 <IconChevronLeftSmall />
               </button>
+            )}
+            {isPhotoLoading && (
+              <span
+                aria-label="사진 불러오는 중"
+                className="size-3 animate-spin rounded-full border border-white/25 border-t-white"
+                role="status"
+              />
             )}
             사진 {card.photoIndex + 1}/{card.photoCount}
             {card.photoCount > 1 && (

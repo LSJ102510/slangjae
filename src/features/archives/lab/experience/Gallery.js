@@ -555,13 +555,32 @@ class Gallery {
     return moodBlendData?.currentMood || null
   }
 
+  // 들어가기 전에 미리 받는 사진 — 카드마다 대표 사진 한 장씩만 받는다. 옆으로 넘겨 볼 현장 사진은
+  // 들어간 뒤 Engine이 보고 있는 카드 근처부터 이어서 받는다(폰 데이터에서 처음 기다림을 줄인다)
   getTextureSources() {
-    // 앨범 안에서 넘겨 볼 현장 사진까지 미리 받아 둔다(목데이터는 같은 파일을 돌려 써서 몇 장 안 된다)
     const textureSources = this.planeConfig
-      .flatMap((planeDefinition) => [planeDefinition.textureSrc, ...(planeDefinition.photos || [])])
+      .map((planeDefinition) => planeDefinition.textureSrc)
       .filter(Boolean)
 
     return [...new Set(textureSources)]
+  }
+
+  hasTexture(source) {
+    return this.texturesBySource.has(source)
+  }
+
+  addTexture(source, texture) {
+    this.applyCoverFit(texture)
+    this.texturesBySource.set(source, texture)
+  }
+
+  // 옆으로 넘기면 보일 사진 — 아직 못 받았으면 Engine이 받은 뒤에 넘긴다
+  peekShift(planeIndex, direction) {
+    const plane = this.planes[planeIndex]
+    if (!plane) return null
+    const { photos } = plane.userData
+    const nextPhotoIndex = (plane.userData.photoIndex + direction + photos.length) % photos.length
+    return { nextPhotoIndex, source: photos[nextPhotoIndex] }
   }
 
   setPreloadedTextures(texturesBySource) {

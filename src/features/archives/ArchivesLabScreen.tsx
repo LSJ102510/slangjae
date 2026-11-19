@@ -43,6 +43,7 @@ interface LabEngineCallbacks {
   onOpenStart: (archiveId: string) => void;
   onTopColorChange: (hex: string) => void;
   onEndChange: (isAtEnd: boolean) => void;
+  onPhotoLoadingChange: (isLoading: boolean) => void;
 }
 
 // 엔진이 첫 색을 알려 주기 전 상태표시줄 색 — 캔버스 바탕(bg-black)과 같다
@@ -193,6 +194,8 @@ function ArchivesLabScreen() {
   const [activeCard, setActiveCard] = useState<LabActiveCard | null>(null);
   // 마지막 카드에서 한 번 더 밀면 끝 화면(환영 문구)이 뜬다
   const [isAtEnd, setIsAtEnd] = useState(false);
+  // 옆으로 넘긴 사진을 받는 중 — 캡션의 사진 번호 옆에 로딩을 띄운다
+  const [isPhotoLoading, setIsPhotoLoading] = useState(false);
   const previousCardRef = useRef<LabActiveCard | null>(null);
   // 별자리 화면 — 끝 화면(환영 문구) 다음. 여는 동안 3D 엔진은 멈춰 둔다
   const restoredConstellationIndex =
@@ -305,6 +308,7 @@ function ArchivesLabScreen() {
       onEndChange: (nextIsAtEnd) => {
         setIsAtEnd(nextIsAtEnd);
       },
+      onPhotoLoadingChange: setIsPhotoLoading,
       onOpenStart: (archiveId) => {
         isOpeningRef.current = true;
         setIsOpening(true);
@@ -509,6 +513,7 @@ function ArchivesLabScreen() {
           <>
             <ArchivesLabCaption
               card={activeCard}
+              isPhotoLoading={isPhotoLoading}
               onOpen={() => engineRef.current?.openActive("photos")}
               onShiftPhoto={(direction) =>
                 engineRef.current?.shiftPhoto(direction)
