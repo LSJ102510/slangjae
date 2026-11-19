@@ -26,6 +26,7 @@ interface LabEngine {
   isInitialized: boolean;
   init: (options?: { restorePosition?: LabPosition | null }) => Promise<void>;
   enter: () => void;
+  exit: () => void;
   scrollToIndex: (index: number) => void;
   openActive: (target: LabOpenTarget) => void;
   shiftPhoto: (direction: 1 | -1) => void;
@@ -478,6 +479,15 @@ function ArchivesLabScreen() {
     setIsEntered(true);
   }
 
+  // 갤러리에서 뒤로가기 — 진입 화면이 위에서 내려와 덮고 갤러리는 첫 행사로 돌아간다.
+  // 이 페이지는 링크로 바로 들어오는 경우가 대부분이라 브라우저 이전 페이지가 없어서 그쪽으로 보내지 않는다.
+  // 진입 화면이 떠 있는 동안은 진입 화면이 이 버튼을 덮는다
+  function handleBack() {
+    engineRef.current?.exit();
+    setIsEntered(false);
+    setIsAtEnd(false);
+  }
+
   return (
     <div className="relative flex-1 overflow-hidden bg-black">
       {/* 캔버스는 effect에서 직접 붙인다 — 앨범에서 돌아오면 맡겨 둔 캔버스를 그대로 다시 붙여야 해서 */}
@@ -490,7 +500,7 @@ function ArchivesLabScreen() {
             <button
               aria-label="뒤로가기"
               className="pointer-events-auto flex size-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur-md active:bg-white/20"
-              onClick={() => navigate(-1)}
+              onClick={handleBack}
               type="button"
             >
               <IconChevronLeft />

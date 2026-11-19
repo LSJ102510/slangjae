@@ -116,6 +116,16 @@ class Engine {
     this.scroll.isInputLocked = false
   }
 
+  // 갤러리 뒤로가기 — 진입 화면 뒤로 물러나 첫 카드로 되돌려 둔다. 다시 들어가면 처음처럼 카드가 날아온다
+  exit() {
+    if (!this.isEntered) return
+    this.isEntered = false
+    this.introStartTime = null
+    this.scroll.isInputLocked = true
+    this.setPhotoLoading(null)
+    this.scroll.jumpToIndex(0)
+  }
+
   scrollToIndex(index) {
     if (this.isOpening) return
     this.scroll.scrollToIndex(index)
