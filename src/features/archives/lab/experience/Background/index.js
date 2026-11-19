@@ -35,6 +35,14 @@ class Background {
     this.blobRadius = this.baseBlobRadius
     this.blobStrength = this.baseBlobStrength
     this.noiseStrength = 0.04
+
+    // 물결(울림) — 링 간격만큼 퍼지는 데 걸리는 시간(초)과, 스크롤이 빠를 때 더 빨리 퍼지는 배율
+    this.rippleSecondsPerRing = 2.6
+    this.rippleVelocityBoost = 5
+    this.rippleOpacity = 0.16
+    this.ripplePhase = 0
+    this.lastUpdateTime = null
+    this.resolution = new THREE.Vector2(1, 1)
   }
 
   init() {
@@ -58,6 +66,10 @@ class Background {
         uBlobStrength: { value: this.blobStrength },
         uTime: { value: 0 },
         uVelocityIntensity: { value: 0 },
+        uResolution: { value: this.resolution },
+        uPixelRatio: { value: 1 },
+        uRipplePhase: { value: 0 },
+        uRippleOpacity: { value: this.rippleOpacity },
       },
     })
 
@@ -131,7 +143,7 @@ class Background {
     target.lerp(this.nextBlob1Color.copy(this.blob1Color).lerp(this.backgroundColor, 0.35), blob1 * this.blobStrength)
     target.lerp(this.nextBlob2Color.copy(this.blob2Color).lerp(this.backgroundColor, 0.35), blob2 * this.blobStrength)
 
-    const lift = uniforms.uVelocityIntensity.value * 0.1
+    const lift = uniforms.uVelocityIntensity.value * 0.06
     target.r = THREE.MathUtils.clamp(target.r + lift, 0, 1)
     target.g = THREE.MathUtils.clamp(target.g + lift, 0, 1)
     target.b = THREE.MathUtils.clamp(target.b + lift, 0, 1)
@@ -230,7 +242,16 @@ class Background {
       this.motionSmoothing
     )
 
+    // 스크롤하면 물결이 빨리 퍼져서 넘길 때마다 울림이 번지는 것처럼 보인다
+    const deltaSeconds =
+      this.lastUpdateTime === null ? 0 : Math.min((time - this.lastUpdateTime) / 1000, 0.1)
+    this.lastUpdateTime = time
+    this.ripplePhase +=
+      (deltaSeconds / this.rippleSecondsPerRing) *
+      (1 + this.smoothedVelocityIntensity * this.rippleVelocityBoost)
+
     if (this.material) {
+      this.material.uniforms.uRipplePhase.value = this.ripplePhase
       this.material.uniforms.uTime.value = time
       this.material.uniforms.uVelocityIntensity.value = this.smoothedVelocityIntensity
     }
@@ -240,6 +261,8 @@ class Background {
 
   render(renderer) {
     if (!this.isInitialized) return
+    renderer.getDrawingBufferSize(this.resolution)
+    this.material.uniforms.uPixelRatio.value = renderer.getPixelRatio()
     renderer.render(this.scene, this.camera)
   }
 

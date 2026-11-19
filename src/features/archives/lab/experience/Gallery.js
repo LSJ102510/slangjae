@@ -50,14 +50,14 @@ class Gallery {
     this.photoIncomingOffset = 0.22
     this.photoOutgoingOffset = 0.32
 
-    // 배경 색조 — 포스터(#1d3c8f) 파랑(0.6 부근)을 가운데 두고 카드마다 ±moodHueRange 안에서 고르게 퍼뜨린다
-    // (extractPalette). 0.08이면 청록빛 파랑(0.52)~남보라(0.68) 사이를 오간다.
+    // 배경 색조 — 포스터(#1d3c8f, 색조 0.62) 파랑을 가운데 두고 카드마다 ±moodHueRange 안에서 고르게 퍼뜨린다
+    // (extractPalette). 남보라·청록까지 벌리면 포스터 파랑과 따로 놀아서, 같은 파랑 안에서 짙고 옅은 차이만 둔다.
     // 사진 색조를 쓰지 않는 이유: 행사 사진은 대부분 따뜻한 색(사람·실내 조명)이라 파랑의 정반대 쪽이어서,
     // 끌어당기면 전부 양 끝(보라 또는 청록)으로만 몰린다. 사진은 밝기·채도에만 반영한다.
-    this.moodHue = 0.6
-    this.moodHueRange = 0.08
+    this.moodHue = 0.62
+    this.moodHueRange = 0.02
     // 기본 채도 — 회색조 사진이어도 파랗게 보이도록 바닥을 깔고, 사진 채도만큼 더 진해진다
-    this.moodSaturation = 0.4
+    this.moodSaturation = 0.5
     this.moodSaturationKeep = 0.5
     // 사진 밝기를 배경 밝기에 얼마나 반영할지 — 밝은 사진은 배경도 조금 밝게, 어두운 사진은 더 깊게
     this.moodLightnessKeep = 0.8

@@ -9,9 +9,27 @@ uniform float uBlobRadiusSecondary;
 uniform float uBlobStrength;
 uniform float uTime;
 uniform float uVelocityIntensity;
+// 물결(울림) — 포스터의 가는 흰 동심원. 화면 크기(px)로 선 굵기를 화면과 상관없이 1px쯤으로 맞춘다
+uniform vec2 uResolution;
+uniform float uPixelRatio;
+uniform float uRipplePhase;
+uniform float uRippleOpacity;
 
 float random(vec2 coord) {
   return fract(sin(dot(coord, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+// center에서 바깥으로 퍼지는 동심원. 좌표 단위는 화면 높이(세로 1). phase만큼 링이 바깥으로 밀려난다.
+// 가운데 가까이와 maxRadius 밖은 흐려서, 원이 생겨나 퍼지다 사라지는 것처럼 보이게 한다.
+float rings(vec2 point, vec2 center, float spacing, float maxRadius, float phase) {
+  float dist = distance(point, center);
+  float wave = (dist - phase * spacing) / spacing;
+  float distanceToRing = abs(fract(wave) - 0.5) * spacing;
+  float cssPx = distanceToRing * uResolution.y / uPixelRatio;
+  float line = 1.0 - smoothstep(0.35, 1.1, cssPx);
+  float fadeOut = 1.0 - smoothstep(maxRadius * 0.55, maxRadius, dist);
+  float fadeIn = smoothstep(0.0, spacing * 2.5, dist);
+  return line * fadeOut * fadeIn;
 }
 
 void main() {
@@ -39,8 +57,20 @@ void main() {
   color = mix(color, blob1SoftColor, blob1 * uBlobStrength);
   color = mix(color, blob2SoftColor, blob2 * uBlobStrength);
 
+  // 물결 두 묶음 — 사진 뒤 화면 가운데에서 퍼지는 큰 울림과, 포스터처럼 오른쪽 아래에서 겹쳐 들어오는 작은 울림.
+  // 스크롤이 빠를수록 조금 더 밝아진다(Background.update가 퍼지는 속도도 올린다)
+  float aspect = uResolution.x / max(uResolution.y, 1.0);
+  vec2 point = vec2((vUv.x - 0.5) * aspect, vUv.y - 0.5);
+  float mainRings = rings(point, vec2(0.0, 0.0), 0.045, 0.95, uRipplePhase);
+  float echoRings = rings(point, vec2(aspect * 0.42, -0.36), 0.04, 0.55, uRipplePhase * 0.8);
+  // 세로로 긴 폰 화면은 물결이 사진·캡션 뒤를 더 많이 지나가서 약하게, 오른쪽 아래 작은 물결은 더 약하게 둔다
+  float isWide = smoothstep(0.6, 1.0, aspect);
+  float ringOpacity = uRippleOpacity * mix(0.55, 1.0, isWide) * (1.0 + uVelocityIntensity * 0.8);
+  float echoOpacity = ringOpacity * mix(0.35, 0.6, isWide);
+  color = mix(color, vec3(1.0), clamp(mainRings * ringOpacity + echoRings * echoOpacity, 0.0, 1.0));
+
   // Velocity luminance lift
-  color += uVelocityIntensity * 0.10;
+  color += uVelocityIntensity * 0.06;
 
   // Film grain
   float grain = random(vUv * vec2(1387.13, 947.91)) - 0.5;
