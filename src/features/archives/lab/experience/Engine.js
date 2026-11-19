@@ -14,8 +14,8 @@ class Engine {
   //   onOpenStart(archiveId): 카드를 눌러 확대 연출이 시작될 때
   //   onTopColorChange(hex): 화면 위 가장자리 배경색이 바뀔 때 — 폰 상태표시줄을 같은 색으로 칠한다
   //   onEndChange(isAtEnd): 마지막 카드를 지나 끝 화면 칸에 들어가거나 나올 때
-  //   onOpen(archiveId, target): 확대 연출이 끝났을 때 — target은 'detail'(사진을 눌렀을 때, 행사 상세)
-  //                              또는 'photos'(앨범 열기 버튼, 현장 사진 모아보기)
+  //   onOpen(archiveId, target): 확대 연출이 끝났을 때 — target은 'photos'(앨범 열기 버튼, 현장 사진 모아보기).
+  //                              사진 카드를 눌러 행사 상세로 가는 건 뺐다 — 세부 정보는 별자리 행사 구역에서 본다
   constructor(canvas, callbacks = {}) {
     if (!(canvas instanceof HTMLCanvasElement)) {
       throw new Error('Engine requires a valid canvas element')
@@ -61,8 +61,6 @@ class Engine {
     this.isOpening = false
     this.openTimeoutId = null
 
-    this.raycaster = new THREE.Raycaster()
-    this.pointer = new THREE.Vector2()
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100)
@@ -97,20 +95,6 @@ class Engine {
       this.setDebugUiVisible(!this.isDebugUiVisible)
     }
 
-    this.onCanvasClick = (event) => {
-      if (!this.isEntered || this.isOpening) return
-      const rect = this.canvas.getBoundingClientRect()
-      this.pointer.set(
-        ((event.clientX - rect.left) / rect.width) * 2 - 1,
-        -((event.clientY - rect.top) / rect.height) * 2 + 1
-      )
-      this.raycaster.setFromCamera(this.pointer, this.camera)
-      const activePlane = this.experience.gallery.planes[this.activeIndex]
-      if (!activePlane) return
-      if (this.raycaster.intersectObject(activePlane, false).length) {
-        this.openActive('detail')
-      }
-    }
     this.scroll.onSwipeX = (direction) => {
       this.shiftPhoto(direction)
     }
@@ -150,7 +134,7 @@ class Engine {
     if (result) this.emitActive()
   }
 
-  openActive(target = 'detail') {
+  openActive(target = 'photos') {
     if (this.isOpening || this.activeIndex < 0 || this.isAtEnd) return
     const plane = this.experience.gallery.planes[this.activeIndex]
     if (!plane) return
@@ -284,7 +268,6 @@ class Engine {
     this.areEventsBound = true
     this.resizeObserver.observe(this.canvas)
     window.addEventListener('keydown', this.onKeyDown)
-    this.canvas.addEventListener('click', this.onCanvasClick)
     this.scroll.bindEvents()
   }
 
@@ -292,7 +275,6 @@ class Engine {
     this.areEventsBound = false
     this.resizeObserver.disconnect()
     window.removeEventListener('keydown', this.onKeyDown)
-    this.canvas.removeEventListener('click', this.onCanvasClick)
     this.scroll.unbindEvents()
   }
 
