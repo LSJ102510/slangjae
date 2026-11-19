@@ -17,21 +17,30 @@ export interface ConstellationHub extends Point {
 
 // ── 첫 화면 별자리 ──────────────────────────────────────────────
 
-// 폰(세로) 기준 세 줄 기둥으로 엇갈려 내려가는 허브 자리(판 안 0~1 비율). 가로 화면에서는 x·y를 바꾼다
-const OVERVIEW_HUB_POSITIONS: ReadonlyArray<readonly [number, number]> = [
-  [0.5, 0.05],
-  [0.17, 0.14],
-  [0.83, 0.14],
-  [0.3, 0.37],
-  [0.72, 0.37],
-  [0.17, 0.62],
-  [0.5, 0.7],
-  [0.83, 0.62],
-  [0.17, 0.9],
-  [0.5, 0.96],
-  [0.83, 0.9],
-  [0.5, 0.45],
-];
+// 폰(세로) 기준 허브 자리(판 안 0~1 비율) — 세 개, 두 개 줄을 번갈아 엇갈려 내려간다. 마지막 줄은 남은 만큼 가운데에
+// 모은다. 가로 화면에서는 x·y를 바꾼다
+function overviewHubPositions(count: number): [number, number][] {
+  const rows: number[] = [];
+  let left = count;
+  while (left > 0) {
+    const size = Math.min(rows.length % 2 === 0 ? 3 : 2, left);
+    rows.push(size);
+    left -= size;
+  }
+  const columns: Record<number, number[]> = {
+    1: [0.5],
+    2: [0.3, 0.72],
+    3: [0.17, 0.5, 0.83],
+  };
+  return rows.flatMap((size, row) =>
+    columns[size].map((x, column): [number, number] => [
+      // 세 개 줄은 가운데를 살짝 내려 지그재그로 보이게 한다
+      x,
+      (rows.length === 1 ? 0.5 : row / (rows.length - 1)) +
+        (size === 3 && column === 1 ? 0.04 : 0),
+    ]),
+  );
+}
 // 허브 하나에서 뻗는 선 수 — 사진 수를 따르되 범위 안에 둔다
 const OVERVIEW_MIN_SPOKES = 10;
 const OVERVIEW_MAX_SPOKES = 36;
@@ -57,9 +66,15 @@ export function createOverviewLayout(
   const padX = Math.max(width * 0.12, 40);
   const padY = Math.max(height * 0.08, 48);
 
+  const positions = overviewHubPositions(photoCounts.length);
+  // 행사가 많을수록 별을 조금 작게 해서 서로 덜 엉키게 한다(10개 기준)
+  const spokeScale = Math.min(
+    1,
+    Math.sqrt(10 / Math.max(photoCounts.length, 1)),
+  );
+
   const hubs = photoCounts.map((photoCount, index) => {
-    const [px, py] =
-      OVERVIEW_HUB_POSITIONS[index % OVERVIEW_HUB_POSITIONS.length];
+    const [px, py] = positions[index];
     const [nx, ny] = isPortrait ? [px, py] : [py, px];
     const x = padX + nx * (width - padX * 2);
     const y = padY + ny * (height - padY * 2);
@@ -71,7 +86,9 @@ export function createOverviewLayout(
       const angle = seeded(index, spokeIndex + 2) * Math.PI * 2;
       // 짧은 선이 많고 긴 선이 드문드문 — 별처럼 보이게 짧은 쪽으로 몬다
       const length =
-        short * (0.035 + seeded(index, spokeIndex + 60) ** 1.6 * 0.17);
+        short *
+        spokeScale *
+        (0.035 + seeded(index, spokeIndex + 60) ** 1.6 * 0.17);
       return {
         x: x + Math.cos(angle) * length,
         y: y + Math.sin(angle) * length,

@@ -38,21 +38,30 @@ interface ArchivesLabConstellationProps {
 }
 
 // 첫 화면은 진입 화면과 같은 포스터 파랑이고, 행사 구역마다 배경색이 바뀐다(참고 화면의 카테고리 색).
-// 이웃 행사끼리 비슷해 보이지 않게 색조가 다른 열 가지를 쓰고, 맺음 화면은 따로 깊은 남색이다
+// 행사 14개가 하나도 겹치지 않게 서로 구별되는 색을 고르고, 이웃 행사끼리 비슷하지 않게 늘어놓았다.
+// 첫 화면 파랑과 헷갈리는 남색 계열은 뺐다. 맺음 화면은 따로 깊은 남색이다
 const POSTER_COLOR = "#17348a";
 const OUTRO_COLOR = "#0b1033";
 const EVENT_COLORS = [
-  "#a3410f",
-  "#1d5a48",
-  "#5b2b80",
-  "#2a6fd6",
-  "#8c2340",
-  "#0f6470",
-  "#86600c",
-  "#a8306a",
-  "#4a6b1a",
-  "#3a3f52",
+  "#a3410f", // 녹슨 주황
+  "#1d5a48", // 숲 초록
+  "#5b2b80", // 보라
+  "#2a6fd6", // 하늘
+  "#8c2340", // 진홍
+  "#0f6470", // 청록
+  "#86600c", // 황토
+  "#a8306a", // 분홍
+  "#4a6b1a", // 올리브
+  "#3a3f52", // 회청
+  "#5e3a1e", // 갈색
+  "#1f8a6a", // 에메랄드
+  "#7d5cc4", // 라벤더
+  "#1a8fb0", // 시안
 ];
+
+function eventColor(index: number) {
+  return EVENT_COLORS[index % EVENT_COLORS.length];
+}
 // 별자리 첫 화면에서 행사마다 그 행사 구역의 배경색으로 별을 칠한다. 원래 색은 포스터 파랑 위에서
 // 어두워 묻혀서 흰색 쪽으로 밝혀 쓴다
 function lighten(hex: string, amount: number) {
@@ -322,7 +331,7 @@ function ArchivesLabConstellation({
       className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700`}
       style={{
         backgroundColor: isInEvent
-          ? EVENT_COLORS[activeIndex % EVENT_COLORS.length]
+          ? eventColor(activeIndex)
           : isOutro
             ? OUTRO_COLOR
             : POSTER_COLOR,
@@ -392,10 +401,7 @@ function ArchivesLabConstellation({
                     strokeWidth={1.2}
                   />
                   {overview.hubs.map((hub, index) => {
-                    const color = lighten(
-                      EVENT_COLORS[index % EVENT_COLORS.length],
-                      0.45,
-                    );
+                    const color = lighten(eventColor(index), 0.45);
                     return (
                       <g
                         className="lab-star-drift"
@@ -489,20 +495,14 @@ function ArchivesLabConstellation({
                         className="lab-hub-glow"
                         cx={hub.x}
                         cy={hub.y}
-                        fill={lighten(
-                          EVENT_COLORS[index % EVENT_COLORS.length],
-                          0.6,
-                        )}
+                        fill={lighten(eventColor(index), 0.6)}
                         r={10}
                         style={{ animationDelay: `${-index * 0.9}s` }}
                       />
                       <circle
                         cx={hub.x}
                         cy={hub.y}
-                        fill={lighten(
-                          EVENT_COLORS[index % EVENT_COLORS.length],
-                          0.6,
-                        )}
+                        fill={lighten(eventColor(index), 0.6)}
                         r={4.5}
                       />
                       <text
