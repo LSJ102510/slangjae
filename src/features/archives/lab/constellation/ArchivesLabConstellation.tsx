@@ -11,7 +11,9 @@ import {
 
 import { fetchArchive } from "@/entities/archives/archivesApi";
 import type { ArchiveDetail } from "@/entities/archives/types";
-import ArchivesLabEventStar from "@/features/archives/lab/constellation/ArchivesLabEventStar";
+import ArchivesLabEventStar, {
+  swayStyle,
+} from "@/features/archives/lab/constellation/ArchivesLabEventStar";
 import {
   createOverviewLayout,
   type OverviewLayout,
@@ -108,6 +110,10 @@ function ArchivesLabConstellation({
   const [activeIndex, setActiveIndex] = useState(-1);
   // 행사(허브)마다 지금 터지는 불꽃의 번호 — 바뀔 때마다 불꽃 요소를 새로 그려 애니메이션을 다시 돌린다
   const [bursts, setBursts] = useState<Record<number, number>>({});
+  // 행사(허브)마다 지금 그어진 초록 선 — 가리키는 끝 점과, 다시 그릴 때 바꾸는 번호
+  const [pulses, setPulses] = useState<
+    Record<number, { key: number; tips: number[] }>
+  >({});
   const [isOutro, setIsOutro] = useState(false);
   const [details, setDetails] = useState<Record<string, ArchiveDetail | null>>(
     {},
@@ -171,6 +177,34 @@ function ArchivesLabConstellation({
     timeoutId = window.setTimeout(fire, BURST_MIN_GAP_MS);
     return () => window.clearTimeout(timeoutId);
   }, [hubCount]);
+
+  // 초록 선 — 0.5초마다 아무 행사 하나를 골라 그 별의 끝 점 한두 개로 긋는다(행사 별과 같은 모양)
+  const spokeCounts = overview?.hubs.map((hub) => hub.spokes.length).join(",");
+  useEffect(() => {
+    const counts = spokeCounts ? spokeCounts.split(",").map(Number) : [];
+    if (
+      counts.length === 0 ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    let pulseId = 0;
+    const intervalId = window.setInterval(() => {
+      const hubIndex = Math.floor(Math.random() * counts.length);
+      const spokeCount = counts[hubIndex];
+      const first = Math.floor(Math.random() * spokeCount);
+      const tips =
+        Math.random() < 0.6
+          ? [first, (first + 1 + Math.floor(Math.random() * 4)) % spokeCount]
+          : [first];
+      pulseId += 1;
+      setPulses((previous) => ({
+        ...previous,
+        [hubIndex]: { key: pulseId, tips },
+      }));
+    }, 500);
+    return () => window.clearInterval(intervalId);
+  }, [spokeCounts]);
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
@@ -372,33 +406,55 @@ function ArchivesLabConstellation({
                           transformOrigin: `${hub.x}px ${hub.y}px`,
                         }}
                       >
-                        {/* 평소엔 별 끝 점이 제각각 천천히 반짝이고, 1.5초마다 행사 하나씩 돌아가며 불꽃처럼
-                            터진다 — 허브에서 빛줄기가 끝 점까지 날아가고 끝 점이 반짝 커졌다 살짝 떨어진다 */}
-                        {hub.spokes.map((spoke, spokeIndex) => (
-                          <line
-                            // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
-                            key={spokeIndex}
-                            stroke={color}
-                            strokeOpacity={0.5}
-                            strokeWidth={1}
-                            x1={hub.x}
-                            x2={spoke.x}
-                            y1={hub.y}
-                            y2={spoke.y}
-                          />
-                        ))}
-                        {hub.spokes.map((spoke, spokeIndex) => (
-                          <circle
-                            className="lab-twinkle"
-                            cx={spoke.x}
-                            cy={spoke.y}
-                            fill={spokeIndex % 6 === 3 ? "white" : color}
-                            // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 별 순서는 고정이다
-                            key={spokeIndex}
-                            r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
-                            style={twinkleStyle(index, spokeIndex)}
-                          />
-                        ))}
+                        {/* 행사 별처럼 선 한 가닥마다 허브를 축으로 제각각 흔들리고, 끝 점은 은은하게 반짝인다.
+                            가끔 허브에서 끝 점으로 초록 선만 그어졌다 사라지고(끝에 원은 달지 않는다),
+                            아무 때나 행사 몇 개가 불꽃처럼 터진다 */}
+                        {hub.spokes.map((spoke, spokeIndex) => {
+                          const pulseTip =
+                            pulses[index]?.tips.indexOf(spokeIndex) ?? -1;
+                          return (
+                            <g
+                              className="lab-star-sway"
+                              // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
+                              key={spokeIndex}
+                              style={swayStyle(index, spokeIndex, hub)}
+                            >
+                              <line
+                                stroke={color}
+                                strokeOpacity={0.5}
+                                strokeWidth={1}
+                                x1={hub.x}
+                                x2={spoke.x}
+                                y1={hub.y}
+                                y2={spoke.y}
+                              />
+                              <circle
+                                className="lab-twinkle"
+                                cx={spoke.x}
+                                cy={spoke.y}
+                                fill={spokeIndex % 6 === 3 ? "white" : color}
+                                r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
+                                style={twinkleStyle(index, spokeIndex)}
+                              />
+                              {pulseTip >= 0 && (
+                                <g
+                                  className="lab-star-pulse"
+                                  key={pulses[index]?.key}
+                                >
+                                  <line
+                                    pathLength={1}
+                                    stroke="#8df0a8"
+                                    strokeWidth={1.4}
+                                    x1={hub.x}
+                                    x2={spoke.x}
+                                    y1={hub.y}
+                                    y2={spoke.y}
+                                  />
+                                </g>
+                              )}
+                            </g>
+                          );
+                        })}
                         {bursts[index] !== undefined && (
                           <g key={bursts[index]}>
                             {hub.spokes.map((spoke, spokeIndex) => (
@@ -417,20 +473,6 @@ function ArchivesLabConstellation({
                                 x2={spoke.x}
                                 y1={hub.y}
                                 y2={spoke.y}
-                              />
-                            ))}
-                            {hub.spokes.map((spoke, spokeIndex) => (
-                              <circle
-                                className="lab-burst-tip"
-                                cx={spoke.x}
-                                cy={spoke.y}
-                                fill={spokeIndex % 6 === 3 ? "white" : color}
-                                // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 별 순서는 고정이다
-                                key={spokeIndex}
-                                r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
-                                style={{
-                                  animationDelay: `${(spokeIndex % 5) * 0.04}s`,
-                                }}
                               />
                             ))}
                           </g>

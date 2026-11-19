@@ -23,7 +23,7 @@ const PULSE_MS = 1700;
 const BLUE_TIP_EVERY = 6;
 
 // 가닥마다 흔들리는 폭(도)·빠르기(초)·시작 위치를 다르게 — 같은 행사는 늘 같은 흔들림이다
-function swayStyle(
+export function swayStyle(
   index: number,
   spokeIndex: number,
   hub: { x: number; y: number },
