@@ -385,22 +385,6 @@ function ArchivesLabConstellation({
       className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} relative z-[25] min-h-dvh text-white transition-colors duration-700`}
       style={{ backgroundColor }}
     >
-      {/* iOS 사파리(26~)는 상태표시줄·도구 막대 색을 화면 위아래 가장자리 가운데에서 맨 위에 있는 고정 요소의
-          배경색으로 정한다. 위쪽 뒤로가기 막대(투명)가 그 자리를 덮으면 예전에 뽑은 색이 남아서, 지금 배경색 띠를
-          가장 위(z-60)에 깔고 색이 바뀔 때마다 새로 붙여(key) 다시 읽게 한다. 맨 위층이라 두꺼우면 뒤로가기 버튼을
-          가려서, 상태표시줄 높이(없으면 4px)만큼만 둔다 */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[max(env(safe-area-inset-top),4px)]"
-        key={`top-${barColor}`}
-        style={{ backgroundColor: barColor }}
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] h-[max(env(safe-area-inset-bottom),4px)]"
-        key={`bottom-${barColor}`}
-        style={{ backgroundColor: barColor }}
-      />
       {/* 첫 화면 — 제목 아래 포스터 파랑 위에 행사 별자리 — 행사마다 그 행사 구역의 색으로 칠한다. 허브를 누르면 그 행사로 간다 */}
       <section className="flex h-svh flex-col px-4 pt-safe-top pb-4">
         <div className="px-2 pt-16 pb-5 text-center">
