@@ -48,7 +48,7 @@
   }
 }
 
-/* 별자리 화면이 끝 화면 위로 천천히 나타난다 */
+/* 모아 보기 버튼으로 열면 별자리 화면이 그 자리에서 나타난다 */
 @keyframes lab-fade-in {
   from {
     opacity: 0;
@@ -58,9 +58,23 @@
   }
 }
 
+/* 별자리 화면이 아래에서 올라와 덮는다 — 진입 화면이 아래로 내려가며 걷히는 것과 짝이다 */
+@keyframes lab-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .lab-fade-in {
-    animation: lab-fade-in 600ms ease-out both;
+    animation: lab-fade-in 500ms ease-out both;
+  }
+
+  .lab-slide-up {
+    animation: lab-slide-up 700ms cubic-bezier(0.6, 0, 0.2, 1) both;
   }
 }
 
@@ -75,17 +89,6 @@
   }
 }
 
-/* 선 끝 별이 은은하게 깜빡인다 */
-@keyframes lab-star-twinkle {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.45;
-  }
-}
-
 .lab-star-drift {
   transform-box: view-box;
 }
@@ -93,10 +96,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .lab-star-drift {
     animation: lab-star-drift 9s ease-in-out infinite;
-  }
-
-  .lab-star-twinkle {
-    animation: lab-star-twinkle 4.2s ease-in-out infinite;
   }
 }
 
@@ -208,5 +207,55 @@
     animation-iteration-count: infinite;
     animation-direction: alternate;
     animation-timing-function: ease-in-out;
+  }
+}
+
+/* 별자리 첫 화면 — 별 끝 점이 은은하게 반짝이고(빠르기·시작은 twinkleStyle이 점마다 흩는다),
+   허브 뒤로 옅은 빛이 천천히 숨 쉰다 */
+@keyframes lab-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes lab-hub-glow {
+  0%,
+  100% {
+    opacity: 0.08;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 0.28;
+    transform: scale(1.15);
+  }
+}
+
+.lab-twinkle {
+  opacity: 0.7;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.lab-hub-glow {
+  opacity: 0.15;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lab-twinkle {
+    animation-name: lab-twinkle;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+  }
+
+  .lab-hub-glow {
+    animation: lab-hub-glow 3.8s ease-in-out infinite;
   }
 }

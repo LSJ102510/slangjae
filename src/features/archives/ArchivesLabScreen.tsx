@@ -201,6 +201,14 @@ function ArchivesLabScreen() {
     restoredConstellationIndex !== null,
   );
   const isConstellationOpenRef = useRef(isConstellationOpen);
+  // 별자리를 어느 행사 구역에서 열지 — 앨범에서 돌아왔거나 #event-n으로 들어온 첫 번만 그 행사이고,
+  // 모아 보기·위로 밀기로 여는 건 늘 첫 화면(올해의 울림)이다
+  const [constellationEntrance, setConstellationEntrance] = useState<
+    "slide" | "fade"
+  >("slide");
+  const [constellationStartIndex, setConstellationStartIndex] = useState(
+    restoredConstellationIndex,
+  );
   const callbacksRef = useRef<LabEngineCallbacks | null>(null);
 
   // 폰 브라우저는 상태표시줄 색을 theme-color(Android Chrome)나 html 배경(iOS Safari)에서 가져온다.
@@ -365,10 +373,13 @@ function ArchivesLabScreen() {
     };
   }, [navigate]);
 
-  function openConstellation() {
+  // 끝 화면에서 위로 밀어 열면 아래에서 올라오고, 갤러리 위 모아 보기 버튼으로 열면 그 자리에서 나타난다
+  function openConstellation(entrance: "slide" | "fade" = "slide") {
     if (isConstellationOpenRef.current) {
       return;
     }
+    setConstellationEntrance(entrance);
+    setConstellationStartIndex(null);
     isConstellationOpenRef.current = true;
     engineRef.current?.pause();
     setIsConstellationOpen(true);
@@ -466,9 +477,9 @@ function ArchivesLabScreen() {
       <div className="size-full" ref={canvasContainerRef} />
 
       <div className="pointer-events-none fixed inset-0 z-10">
-        {/* 상단 — 뒤로가기만 둔다. 사진 위라 반투명 유리 버튼 */}
+        {/* 상단 — 뒤로가기와, 끝까지 넘기지 않아도 바로 별자리(올해 행사 모아 보기)로 가는 버튼. 사진 위라 반투명 유리 버튼 */}
         <div className="pt-safe-top">
-          <div className="flex h-14 items-center px-4">
+          <div className="flex h-14 items-center justify-between px-4">
             <button
               aria-label="뒤로가기"
               className="pointer-events-auto flex size-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur-md active:bg-white/20"
@@ -476,6 +487,17 @@ function ArchivesLabScreen() {
               type="button"
             >
               <IconChevronLeft />
+            </button>
+            <button
+              className={`pointer-events-auto flex h-8 items-center rounded-full border border-white/15 bg-white/10 px-3 font-semibold text-white text-xs backdrop-blur-md transition-opacity active:bg-white/20 ${
+                isEntered && !isAtEnd
+                  ? "opacity-100"
+                  : "pointer-events-none opacity-0"
+              }`}
+              onClick={() => openConstellation("fade")}
+              type="button"
+            >
+              모아 보기
             </button>
           </div>
         </div>
@@ -536,22 +558,29 @@ function ArchivesLabScreen() {
         <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed min-[769px]:text-base">
           올해의 마지막 이야기를 함께 만들어요.
         </p>
-        {/* 다음 볼 거리는 별자리 하나뿐이라 버튼도 하나다(처음으로는 별자리 끝에 있다) */}
+        {/* 위로 한 번 더 밀면 별자리(올해 행사 모아 보기)가 열린다 — 첫 카드의 안내와 같은 모양. 눌러도 열린다 */}
         <button
-          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black min-[769px]:w-80 min-[769px]:self-start"
-          onClick={openConstellation}
+          className="lab-float mt-10 flex flex-col items-center self-center text-white/60 text-xs"
+          onClick={() => openConstellation()}
           type="button"
         >
-          모아 보기
+          <IconChevronUpSmall />
+          <span className="min-[769px]:hidden">
+            위로 밀어 올해 행사 모아 보기
+          </span>
+          <span className="hidden min-[769px]:inline">
+            스크롤해서 올해 행사 모아 보기
+          </span>
         </button>
-        <div className="h-4" />
+        <div className="h-6" />
         <div className="h-safe-bottom" />
       </div>
 
       {isConstellationOpen && (
         <ArchivesLabConstellation
           events={CONSTELLATION_EVENTS}
-          initialIndex={restoredConstellationIndex}
+          entrance={constellationEntrance}
+          initialIndex={constellationStartIndex}
           onClose={closeConstellation}
           onOpenAlbum={openConstellationAlbum}
           onRestart={() => {
@@ -561,10 +590,10 @@ function ArchivesLabScreen() {
         />
       )}
 
-      {/* 진입 화면 — 들어가면 카드가 멀리서 날아온다 */}
+      {/* 진입 화면 — 들어가면 화면 아래로 내려가며 걷히고, 그 뒤에서 카드가 멀리서 날아온다 */}
       <div
-        className={`fixed inset-0 z-20 flex flex-col justify-end px-6 text-white transition-opacity duration-700 min-[769px]:px-20 min-[769px]:pb-14 ${
-          isEntered ? "pointer-events-none opacity-0" : "opacity-100"
+        className={`fixed inset-0 z-20 flex flex-col justify-end px-6 text-white transition-transform duration-700 ease-[cubic-bezier(0.6,0,0.2,1)] min-[769px]:px-20 min-[769px]:pb-14 ${
+          isEntered ? "pointer-events-none translate-y-full" : "translate-y-0"
         }`}
       >
         <ArchivesLabIntroBackground />

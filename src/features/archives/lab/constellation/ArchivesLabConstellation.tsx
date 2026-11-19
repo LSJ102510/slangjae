@@ -1,5 +1,6 @@
 import { IconChevronLeft } from "@wanteddev/wds-icon";
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -25,6 +26,8 @@ export interface ConstellationEvent {
 
 interface ArchivesLabConstellationProps {
   events: ConstellationEvent[];
+  /** 열릴 때 — 아래에서 올라오거나(slide) 그 자리에서 나타난다(fade) */
+  entrance: "slide" | "fade";
   /** 앨범에서 돌아왔거나 #event-n으로 들어왔을 때 — 그 행사 구역에서 바로 시작한다 */
   initialIndex: number | null;
   onClose: () => void;
@@ -48,6 +51,30 @@ const EVENT_COLORS = [
   "#4a6b1a",
   "#3a3f52",
 ];
+// 별자리 첫 화면에서 행사마다 그 행사 구역의 배경색으로 별을 칠한다. 원래 색은 포스터 파랑 위에서
+// 어두워 묻혀서 흰색 쪽으로 밝혀 쓴다
+function lighten(hex: string, amount: number) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const channel = (shift: number) =>
+    Math.round(
+      ((value >> shift) & 255) + (255 - ((value >> shift) & 255)) * amount,
+    );
+  return `rgb(${channel(16)} ${channel(8)} ${channel(0)})`;
+}
+
+// 별 끝 점마다 반짝이는 빠르기(2.4~5초)와 시작 때를 흩어서 한꺼번에 깜빡이지 않게 한다
+function twinkleStyle(hubIndex: number, spokeIndex: number): CSSProperties {
+  const random = (salt: number) => {
+    const value =
+      Math.sin((hubIndex + 3) * 57.1 + (spokeIndex + 1) * salt) * 43758.5453;
+    return value - Math.floor(value);
+  };
+  return {
+    animationDelay: `${(-random(19.7) * 5).toFixed(2)}s`,
+    animationDuration: `${(2.4 + random(83.3) * 2.6).toFixed(2)}s`,
+  };
+}
+
 const MONO_FONT = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
 // 허브 아래 이름이 옆 허브와 겹치지 않게 짧게 자른다
@@ -60,6 +87,7 @@ function shortTitle(title: string) {
 // 이어지며, 구역마다 그 행사의 별 하나(ArchivesLabEventStar)와 큰 제목, 소개 상자가 있다.
 function ArchivesLabConstellation({
   events,
+  entrance,
   initialIndex,
   onClose,
   onRestart,
@@ -204,7 +232,7 @@ function ArchivesLabConstellation({
 
   return (
     <div
-      className="lab-fade-in fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700"
+      className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700`}
       style={{
         backgroundColor: isInEvent
           ? EVENT_COLORS[activeIndex % EVENT_COLORS.length]
@@ -218,7 +246,7 @@ function ArchivesLabConstellation({
         onScroll={handleScroll}
         ref={scrollRef}
       >
-        {/* 첫 화면 — 제목 아래 어두운 판에 행사 별자리. 허브를 누르면 그 행사로 간다 */}
+        {/* 첫 화면 — 제목 아래 포스터 파랑 위에 행사 별자리 — 행사마다 그 행사 구역의 색으로 칠한다. 허브를 누르면 그 행사로 간다 */}
         <section className="flex h-svh flex-col px-4 pt-safe-top pb-4">
           <div className="px-2 pt-16 pb-5 text-center">
             <h2 className="font-bold text-[52px] leading-none tracking-tight min-[769px]:text-7xl">
@@ -230,7 +258,7 @@ function ArchivesLabConstellation({
             </p>
           </div>
           <div
-            className="relative min-h-0 flex-1 overflow-hidden bg-[#020719]"
+            className="relative min-h-0 flex-1 overflow-hidden"
             ref={panelRef}
           >
             {overview && (
@@ -242,30 +270,12 @@ function ArchivesLabConstellation({
                   role="presentation"
                   width={overview.width}
                 >
-                  <defs>
-                    {/* 허브 쪽은 청록, 끝으로 갈수록 파랑 */}
-                    {overview.hubs.map((hub, index) => (
-                      <radialGradient
-                        cx={hub.x}
-                        cy={hub.y}
-                        gradientUnits="userSpaceOnUse"
-                        id={`lab-spoke-${index}`}
-                        // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                        key={index}
-                        r={Math.min(overview.width, overview.height) * 0.2}
-                      >
-                        <stop offset="0" stopColor="#3fd8a8" />
-                        <stop offset="0.55" stopColor="#2f8fe8" />
-                        <stop offset="1" stopColor="#4652e0" />
-                      </radialGradient>
-                    ))}
-                  </defs>
                   {overview.crossLinks.map(([from, to], linkIndex) => (
                     <line
                       // biome-ignore lint/suspicious/noArrayIndexKey: 배치에서 정해진 순서 그대로다
                       key={linkIndex}
-                      stroke="#5865f2"
-                      strokeOpacity={0.22}
+                      stroke="white"
+                      strokeOpacity={0.1}
                       strokeWidth={0.6}
                       x1={from.x}
                       x2={to.x}
@@ -277,8 +287,8 @@ function ArchivesLabConstellation({
                     <line
                       // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
                       key={index}
-                      stroke="#3d4bd6"
-                      strokeOpacity={0.6}
+                      stroke="white"
+                      strokeOpacity={0.22}
                       strokeWidth={1}
                       x1={overview.center.x}
                       x2={hub.x}
@@ -289,61 +299,79 @@ function ArchivesLabConstellation({
                   <circle
                     cx={overview.center.x}
                     cy={overview.center.y}
-                    fill="#020719"
+                    fill="none"
                     r={5}
-                    stroke="#5b6cff"
+                    stroke="white"
                     strokeWidth={1.2}
                   />
+                  {overview.hubs.map((hub, index) => {
+                    const color = lighten(
+                      EVENT_COLORS[index % EVENT_COLORS.length],
+                      0.45,
+                    );
+                    return (
+                      <g
+                        className="lab-star-drift"
+                        // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
+                        key={index}
+                        style={{
+                          animationDelay: `${-index * 1.7}s`,
+                          transformOrigin: `${hub.x}px ${hub.y}px`,
+                        }}
+                      >
+                        {/* 별 끝 점이 제각각 천천히 밝아졌다 어두워지며 은은하게 반짝인다 */}
+                        {hub.spokes.map((spoke, spokeIndex) => (
+                          <line
+                            // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
+                            key={spokeIndex}
+                            stroke={color}
+                            strokeOpacity={0.5}
+                            strokeWidth={1}
+                            x1={hub.x}
+                            x2={spoke.x}
+                            y1={hub.y}
+                            y2={spoke.y}
+                          />
+                        ))}
+                        {hub.spokes.map((spoke, spokeIndex) => (
+                          <circle
+                            className="lab-twinkle"
+                            cx={spoke.x}
+                            cy={spoke.y}
+                            fill={spokeIndex % 6 === 3 ? "white" : color}
+                            // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 별 순서는 고정이다
+                            key={spokeIndex}
+                            r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
+                            style={twinkleStyle(index, spokeIndex)}
+                          />
+                        ))}
+                      </g>
+                    );
+                  })}
                   {overview.hubs.map((hub, index) => (
                     <g
-                      className="lab-star-drift"
-                      // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
-                      key={index}
-                      style={{
-                        animationDelay: `${-index * 1.7}s`,
-                        transformOrigin: `${hub.x}px ${hub.y}px`,
-                      }}
-                    >
-                      {hub.spokes.map((spoke, spokeIndex) => (
-                        <line
-                          // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
-                          key={spokeIndex}
-                          stroke={`url(#lab-spoke-${index})`}
-                          strokeOpacity={0.85}
-                          strokeWidth={1}
-                          x1={hub.x}
-                          x2={spoke.x}
-                          y1={hub.y}
-                          y2={spoke.y}
-                        />
-                      ))}
-                      {hub.spokes.map((spoke, spokeIndex) => (
-                        <circle
-                          className="lab-star-twinkle"
-                          cx={spoke.x}
-                          cy={spoke.y}
-                          fill="#4f5ff0"
-                          // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 별 순서는 고정이다
-                          key={spokeIndex}
-                          r={2}
-                          style={{
-                            animationDelay: `${-(spokeIndex % 7) * 0.6}s`,
-                          }}
-                        />
-                      ))}
-                    </g>
-                  ))}
-                  {overview.hubs.map((hub, index) => (
-                    <g
                       // biome-ignore lint/suspicious/noArrayIndexKey: 허브는 행사 순서 그대로이고 바뀌지 않는다
                       key={index}
                     >
-                      <rect
-                        fill="#6474ff"
-                        height={8}
-                        width={8}
-                        x={hub.x - 4}
-                        y={hub.y - 4}
+                      <circle
+                        className="lab-hub-glow"
+                        cx={hub.x}
+                        cy={hub.y}
+                        fill={lighten(
+                          EVENT_COLORS[index % EVENT_COLORS.length],
+                          0.6,
+                        )}
+                        r={10}
+                        style={{ animationDelay: `${-index * 0.9}s` }}
+                      />
+                      <circle
+                        cx={hub.x}
+                        cy={hub.y}
+                        fill={lighten(
+                          EVENT_COLORS[index % EVENT_COLORS.length],
+                          0.6,
+                        )}
+                        r={4.5}
                       />
                       <text
                         fill="white"
