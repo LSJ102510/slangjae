@@ -62,6 +62,11 @@ function lighten(hex: string, amount: number) {
   return `rgb(${channel(16)} ${channel(8)} ${channel(0)})`;
 }
 
+// 불꽃 — 아무 때나 아무 행사에서 터진다. 0.4~1.2초마다 행사 1~3개를 골라 터뜨린다
+const BURST_MIN_GAP_MS = 400;
+const BURST_MAX_GAP_MS = 1200;
+const BURST_MAX_COUNT = 3;
+
 // 별 끝 점마다 반짝이는 빠르기(2.4~5초)와 시작 때를 흩어서 한꺼번에 깜빡이지 않게 한다
 function twinkleStyle(hubIndex: number, spokeIndex: number): CSSProperties {
   const random = (salt: number) => {
@@ -103,6 +108,8 @@ function ArchivesLabConstellation({
     height: number;
   } | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  // 행사(허브)마다 지금 터지는 불꽃의 번호 — 바뀔 때마다 불꽃 요소를 새로 그려 애니메이션을 다시 돌린다
+  const [bursts, setBursts] = useState<Record<number, number>>({});
   const [isOutro, setIsOutro] = useState(false);
   const [details, setDetails] = useState<Record<string, ArchiveDetail | null>>(
     {},
@@ -136,6 +143,36 @@ function ArchivesLabConstellation({
       cancelled = true;
     };
   }, [events]);
+
+  const hubCount = overview?.hubs.length ?? 0;
+  useEffect(() => {
+    if (
+      hubCount === 0 ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    let burstId = 0;
+    let timeoutId = 0;
+    const fire = () => {
+      const count = 1 + Math.floor(Math.random() * BURST_MAX_COUNT);
+      setBursts((previous) => {
+        const next = { ...previous };
+        for (let k = 0; k < count; k += 1) {
+          burstId += 1;
+          next[Math.floor(Math.random() * hubCount)] = burstId;
+        }
+        return next;
+      });
+      timeoutId = window.setTimeout(
+        fire,
+        BURST_MIN_GAP_MS +
+          Math.random() * (BURST_MAX_GAP_MS - BURST_MIN_GAP_MS),
+      );
+    };
+    timeoutId = window.setTimeout(fire, BURST_MIN_GAP_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [hubCount]);
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
@@ -319,7 +356,8 @@ function ArchivesLabConstellation({
                           transformOrigin: `${hub.x}px ${hub.y}px`,
                         }}
                       >
-                        {/* 별 끝 점이 제각각 천천히 밝아졌다 어두워지며 은은하게 반짝인다 */}
+                        {/* 평소엔 별 끝 점이 제각각 천천히 반짝이고, 1.5초마다 행사 하나씩 돌아가며 불꽃처럼
+                            터진다 — 허브에서 빛줄기가 끝 점까지 날아가고 끝 점이 반짝 커졌다 살짝 떨어진다 */}
                         {hub.spokes.map((spoke, spokeIndex) => (
                           <line
                             // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
@@ -345,6 +383,42 @@ function ArchivesLabConstellation({
                             style={twinkleStyle(index, spokeIndex)}
                           />
                         ))}
+                        {bursts[index] !== undefined && (
+                          <g key={bursts[index]}>
+                            {hub.spokes.map((spoke, spokeIndex) => (
+                              <line
+                                className="lab-burst-trail"
+                                // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 선 순서는 고정이다
+                                key={spokeIndex}
+                                pathLength={1}
+                                stroke={color}
+                                strokeLinecap="round"
+                                strokeWidth={1.6}
+                                style={{
+                                  animationDelay: `${(spokeIndex % 5) * 0.04}s`,
+                                }}
+                                x1={hub.x}
+                                x2={spoke.x}
+                                y1={hub.y}
+                                y2={spoke.y}
+                              />
+                            ))}
+                            {hub.spokes.map((spoke, spokeIndex) => (
+                              <circle
+                                className="lab-burst-tip"
+                                cx={spoke.x}
+                                cy={spoke.y}
+                                fill={spokeIndex % 6 === 3 ? "white" : color}
+                                // biome-ignore lint/suspicious/noArrayIndexKey: 같은 허브의 별 순서는 고정이다
+                                key={spokeIndex}
+                                r={spokeIndex % 6 === 3 ? 2.2 : 1.6}
+                                style={{
+                                  animationDelay: `${(spokeIndex % 5) * 0.04}s`,
+                                }}
+                              />
+                            ))}
+                          </g>
+                        )}
                       </g>
                     );
                   })}
