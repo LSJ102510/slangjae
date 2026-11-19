@@ -8,6 +8,9 @@ import ArchivesLabIntroBackground, {
   LAB_INTRO_TOP_COLOR,
 } from "@/features/archives/lab/ArchivesLabIntroBackground";
 import ArchivesLabTimeline from "@/features/archives/lab/ArchivesLabTimeline";
+import ArchivesLabConstellation, {
+  type ConstellationEvent,
+} from "@/features/archives/lab/constellation/ArchivesLabConstellation";
 import { galleryPlaneData } from "@/features/archives/lab/experience/galleryData.js";
 import type { LabActiveCard } from "@/features/archives/lab/types";
 
@@ -115,6 +118,8 @@ function takeParkedEngine(hasRestorePosition: boolean) {
 interface LabPosition {
   index: number;
   photoIndex: number;
+  /** 별자리 화면에서 앨범을 열었으면 그 행사 — 돌아오면 별자리 그 행사 구역에서 다시 시작한다 */
+  constellationIndex?: number;
 }
 
 function isLabPosition(state: unknown): state is LabPosition {
@@ -126,6 +131,40 @@ function isLabPosition(state: unknown): state is LabPosition {
   );
 }
 
+// 별자리 화면에 넘기는 행사 — 갤러리 카드와 같은 순서(최근 행사부터)
+const CONSTELLATION_EVENTS: ConstellationEvent[] = galleryPlaneData.map(
+  (plane: {
+    archiveId: string;
+    label: { word: string; date: string };
+    photos: string[];
+  }) => ({
+    archiveId: plane.archiveId,
+    date: plane.label.date,
+    photos: plane.photos,
+    title: plane.label.word,
+  }),
+);
+
+// 주소 끝 #event-n(별자리에서 행사를 누르면 남는다)으로 들어오면 별자리 그 행사에서 시작한다
+function getHashConstellationPosition(hash: string): LabPosition | null {
+  const match = /^#event-(\d+)$/.exec(hash);
+  const eventIndex = match ? Number(match[1]) - 1 : -1;
+  if (eventIndex < 0 || eventIndex >= galleryPlaneData.length) {
+    return null;
+  }
+  return {
+    constellationIndex: eventIndex,
+    index: galleryPlaneData.length - 1,
+    photoIndex: 0,
+  };
+}
+
+// 끝 화면이 뜨자마자 그 스크롤의 관성으로 별자리가 열리지 않게, 끝 화면이 이만큼 떠 있은 뒤부터 받는다
+const CONSTELLATION_GESTURE_DELAY_MS = 700;
+// 끝 화면에서 이만큼 더 내리면(위로 밀면) 별자리를 연다
+const CONSTELLATION_WHEEL_DISTANCE = 60;
+const CONSTELLATION_SWIPE_DISTANCE = 50;
+
 // 카드가 바뀌는 순간 손끝에 짧게 — 안드로이드만 지원하고 iOS 사파리는 vibrate가 없다
 function tick() {
   navigator.vibrate?.(8);
@@ -135,8 +174,10 @@ function ArchivesLabScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   // 마운트 때의 값만 쓴다 — 열기 직전에 state를 바꿔 써도 엔진을 다시 만들지 않게 ref로 잡아 둔다
-  const restoredPositionRef = useRef(
-    isLabPosition(location.state) ? location.state : null,
+  const restoredPositionRef = useRef<LabPosition | null>(
+    isLabPosition(location.state)
+      ? location.state
+      : getHashConstellationPosition(location.hash),
   );
   const pathnameRef = useRef(location.pathname);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -153,6 +194,14 @@ function ArchivesLabScreen() {
   // 마지막 카드에서 한 번 더 밀면 끝 화면(환영 문구)이 뜬다
   const [isAtEnd, setIsAtEnd] = useState(false);
   const previousCardRef = useRef<LabActiveCard | null>(null);
+  // 별자리 화면 — 끝 화면(환영 문구) 다음. 여는 동안 3D 엔진은 멈춰 둔다
+  const restoredConstellationIndex =
+    restoredPositionRef.current?.constellationIndex ?? null;
+  const [isConstellationOpen, setIsConstellationOpen] = useState(
+    restoredConstellationIndex !== null,
+  );
+  const isConstellationOpenRef = useRef(isConstellationOpen);
+  const callbacksRef = useRef<LabEngineCallbacks | null>(null);
 
   // 폰 브라우저는 상태표시줄 색을 theme-color(Android Chrome)나 html 배경(iOS Safari)에서 가져온다.
   // 둘 다 없으면 흰색이라 화면 위에 흰 띠가 생긴다 — 이 화면에 있는 동안만 배경 셰이더의 위쪽 색을 따라 칠한다.
@@ -257,6 +306,7 @@ function ArchivesLabScreen() {
       },
     };
 
+    callbacksRef.current = callbacks;
     let disposed = false;
     let engine: LabEngine | null = null;
     let canvas: HTMLCanvasElement;
@@ -286,9 +336,14 @@ function ArchivesLabScreen() {
           instance
             .init({ restorePosition: restoredPositionRef.current })
             .then(() => {
-              if (!disposed) {
-                setIsReady(true);
+              if (disposed) {
+                return;
               }
+              // 별자리에서 앨범을 열었다 돌아온 경우 — 별자리가 덮고 있으니 3D는 멈춰 둔다
+              if (isConstellationOpenRef.current) {
+                instance.pause();
+              }
+              setIsReady(true);
             })
             .catch((error: unknown) => {
               console.error("Engine initialization failed", error);
@@ -309,6 +364,96 @@ function ArchivesLabScreen() {
       }
     };
   }, [navigate]);
+
+  function openConstellation() {
+    if (isConstellationOpenRef.current) {
+      return;
+    }
+    isConstellationOpenRef.current = true;
+    engineRef.current?.pause();
+    setIsConstellationOpen(true);
+  }
+
+  function closeConstellation() {
+    // 별자리에서 남긴 #event-n은 별자리를 닫으면 뜻이 없어서 지운다
+    if (window.location.hash) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    }
+    isConstellationOpenRef.current = false;
+    setIsConstellationOpen(false);
+    const engine = engineRef.current;
+    if (engine && callbacksRef.current) {
+      engine.resume(callbacksRef.current);
+    }
+  }
+
+  // 별자리에서 연 앨범 — 돌아왔을 때 별자리 그 행사로 오도록 이 화면 history 항목에 남겨 둔다
+  function openConstellationAlbum(eventIndex: number, archiveId: string) {
+    const position: LabPosition = {
+      constellationIndex: eventIndex,
+      index: galleryPlaneData.length - 1,
+      photoIndex: 0,
+    };
+    navigate(pathnameRef.current, { replace: true, state: position });
+    navigate(`/archives/${archiveId}/photos`);
+  }
+
+  // 끝 화면에서 한 번 더 내리면(휠·위로 밀기) 별자리를 연다. 엔진도 같은 입력을 받지만 끝에서 더 가지 않는다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: openConstellation은 ref만 읽어서 매 렌더 새로 만들어도 같다
+  useEffect(() => {
+    if (!isEntered || !isAtEnd || isConstellationOpen) {
+      return;
+    }
+    const readyAt = performance.now() + CONSTELLATION_GESTURE_DELAY_MS;
+    let wheelDistance = 0;
+    let touchStartY: number | null = null;
+    const isReadyForGesture = () => performance.now() >= readyAt;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!isReadyForGesture() || event.deltaY <= 0) {
+        wheelDistance = 0;
+        return;
+      }
+      wheelDistance += event.deltaY;
+      if (wheelDistance >= CONSTELLATION_WHEEL_DISTANCE) {
+        openConstellation();
+      }
+    };
+    const handleTouchStart = (event: TouchEvent) => {
+      touchStartY = event.touches[0]?.clientY ?? null;
+    };
+    const handleTouchEnd = (event: TouchEvent) => {
+      const endY = event.changedTouches[0]?.clientY;
+      if (touchStartY === null || endY === undefined || !isReadyForGesture()) {
+        return;
+      }
+      if (touchStartY - endY >= CONSTELLATION_SWIPE_DISTANCE) {
+        openConstellation();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        isReadyForGesture() &&
+        (event.key === "ArrowDown" || event.key === "PageDown")
+      ) {
+        openConstellation();
+      }
+    };
+    window.addEventListener("wheel", handleWheel, { passive: true });
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isEntered, isAtEnd, isConstellationOpen]);
 
   function handleEnter() {
     engineRef.current?.enter();
@@ -383,10 +528,7 @@ function ArchivesLabScreen() {
         }`}
       >
         <ArchivesLabIntroBackground />
-        <p className="font-semibold text-white/50 text-xs tracking-widest">
-          STREAM ARCHIVE
-        </p>
-        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
+        <h1 className="font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
           슬랑제: 울림에
           <br />
           오신 걸 환영합니다
@@ -394,16 +536,30 @@ function ArchivesLabScreen() {
         <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed min-[769px]:text-base">
           올해의 마지막 이야기를 함께 만들어요.
         </p>
+        {/* 다음 볼 거리는 별자리 하나뿐이라 버튼도 하나다(처음으로는 별자리 끝에 있다) */}
         <button
           className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black min-[769px]:w-80 min-[769px]:self-start"
-          onClick={() => engineRef.current?.scrollToIndex(0)}
+          onClick={openConstellation}
           type="button"
         >
-          처음으로
+          모아 보기
         </button>
-        <div className="h-6" />
+        <div className="h-4" />
         <div className="h-safe-bottom" />
       </div>
+
+      {isConstellationOpen && (
+        <ArchivesLabConstellation
+          events={CONSTELLATION_EVENTS}
+          initialIndex={restoredConstellationIndex}
+          onClose={closeConstellation}
+          onOpenAlbum={openConstellationAlbum}
+          onRestart={() => {
+            closeConstellation();
+            engineRef.current?.scrollToIndex(0);
+          }}
+        />
+      )}
 
       {/* 진입 화면 — 들어가면 카드가 멀리서 날아온다 */}
       <div
@@ -412,10 +568,7 @@ function ArchivesLabScreen() {
         }`}
       >
         <ArchivesLabIntroBackground />
-        <p className="font-semibold text-white/50 text-xs tracking-widest">
-          STREAM ARCHIVE
-        </p>
-        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
+        <h1 className="font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
           올해 함께한
           <br />
           순간들
