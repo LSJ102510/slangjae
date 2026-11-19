@@ -163,7 +163,7 @@ function getHashConstellationPosition(hash: string): LabPosition | null {
 const CONSTELLATION_GESTURE_DELAY_MS = 700;
 // 끝 화면에서 이만큼 더 내리면(위로 밀면) 별자리를 연다
 const CONSTELLATION_WHEEL_DISTANCE = 60;
-const CONSTELLATION_SWIPE_DISTANCE = 50;
+const CONSTELLATION_SWIPE_DISTANCE = 36;
 
 // 카드가 바뀌는 순간 손끝에 짧게 — 안드로이드만 지원하고 iOS 사파리는 vibrate가 없다
 function tick() {
@@ -437,12 +437,15 @@ function ArchivesLabScreen() {
     const handleTouchStart = (event: TouchEvent) => {
       touchStartY = event.touches[0]?.clientY ?? null;
     };
-    const handleTouchEnd = (event: TouchEvent) => {
-      const endY = event.changedTouches[0]?.clientY;
-      if (touchStartY === null || endY === undefined || !isReadyForGesture()) {
+    // 손을 뗄 때까지 기다리지 않고, 위로 미는 도중 일정 거리를 넘으면 바로 올라오기 시작한다 —
+    // 손가락이 움직이는 흐름 그대로 이어져서 뗀 뒤에 한 박자 늦게 튀어 오르는 느낌이 없다
+    const handleTouchMove = (event: TouchEvent) => {
+      const y = event.touches[0]?.clientY;
+      if (touchStartY === null || y === undefined || !isReadyForGesture()) {
         return;
       }
-      if (touchStartY - endY >= CONSTELLATION_SWIPE_DISTANCE) {
+      if (touchStartY - y >= CONSTELLATION_SWIPE_DISTANCE) {
+        touchStartY = null;
         openConstellation();
       }
     };
@@ -456,12 +459,12 @@ function ArchivesLabScreen() {
     };
     window.addEventListener("wheel", handleWheel, { passive: true });
     window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("wheel", handleWheel);
       window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isEntered, isAtEnd, isConstellationOpen]);
