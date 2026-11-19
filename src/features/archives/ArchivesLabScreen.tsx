@@ -250,17 +250,17 @@ function ArchivesLabScreen() {
     };
   }, []);
 
-  // 끝 화면도 진입 화면과 같은 포스터 배경이라 같은 색을 쓴다
+  // 끝 화면도 진입 화면과 같은 포스터 배경이라 같은 색을 쓴다. 별자리가 열려 있으면 별자리가 자기 색을 알려 준다
   useEffect(() => {
     isEnteredRef.current = isEntered;
     isAtEndRef.current = isAtEnd;
-    if (themeColorMetaRef.current) {
+    if (themeColorMetaRef.current && !isConstellationOpen) {
       applyTopColor(
         themeColorMetaRef.current,
         isEntered && !isAtEnd ? engineTopColorRef.current : LAB_INTRO_TOP_COLOR,
       );
     }
-  }, [isEntered, isAtEnd]);
+  }, [isEntered, isAtEnd, isConstellationOpen]);
 
   useEffect(() => {
     const container = canvasContainerRef.current;
@@ -301,6 +301,7 @@ function ArchivesLabScreen() {
         if (
           isEnteredRef.current &&
           !isAtEndRef.current &&
+          !isConstellationOpenRef.current &&
           themeColorMetaRef.current
         ) {
           applyTopColor(themeColorMetaRef.current, hex);
@@ -600,6 +601,11 @@ function ArchivesLabScreen() {
           entrance={constellationEntrance}
           initialIndex={constellationStartIndex}
           onClose={closeConstellation}
+          onColorChange={(hex) => {
+            if (themeColorMetaRef.current) {
+              applyTopColor(themeColorMetaRef.current, hex);
+            }
+          }}
           onOpenAlbum={openConstellationAlbum}
           onRestart={() => {
             closeConstellation();

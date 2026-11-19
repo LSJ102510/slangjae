@@ -34,6 +34,8 @@ interface ArchivesLabConstellationProps {
   initialIndex: number | null;
   onClose: () => void;
   onRestart: () => void;
+  /** 지금 배경색 — 폰 상태표시줄·브라우저 도구 막대를 같은 색으로 칠하게 화면에 알린다 */
+  onColorChange: (hex: string) => void;
   onOpenAlbum: (eventIndex: number, archiveId: string) => void;
 }
 
@@ -105,6 +107,7 @@ function ArchivesLabConstellation({
   initialIndex,
   onClose,
   onRestart,
+  onColorChange,
   onOpenAlbum,
 }: ArchivesLabConstellationProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -326,16 +329,24 @@ function ArchivesLabConstellation({
     onClose();
   }
 
+  const backgroundColor = isInEvent
+    ? eventColor(activeIndex)
+    : isOutro
+      ? OUTRO_COLOR
+      : POSTER_COLOR;
+
+  // iOS 사파리는 도구 막대 색을 화면에서 뽑아 두고 배경이 바뀌어도 늦게(때로는 안) 따라온다 —
+  // 바뀔 때마다 직접 알려서 지금 색으로 맞춘다
+  const onColorChangeRef = useRef(onColorChange);
+  onColorChangeRef.current = onColorChange;
+  useEffect(() => {
+    onColorChangeRef.current(backgroundColor);
+  }, [backgroundColor]);
+
   return (
     <div
       className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700`}
-      style={{
-        backgroundColor: isInEvent
-          ? eventColor(activeIndex)
-          : isOutro
-            ? OUTRO_COLOR
-            : POSTER_COLOR,
-      }}
+      style={{ backgroundColor }}
     >
       <div
         className="scrollbar-hidden absolute inset-0 overflow-y-auto overscroll-contain"
