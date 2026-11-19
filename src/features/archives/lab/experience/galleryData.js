@@ -3,6 +3,7 @@ import freshmanOrientation from "@/assets/images/archives/freshman-orientation.j
 import haeoreumje from "@/assets/images/archives/haeoreumje.jpg";
 import snackEvent from "@/assets/images/archives/snack-event.jpg";
 import sportsDay from "@/assets/images/archives/sports-day.jpg";
+import { REAL_ARCHIVES } from "@/entities/archives/archivesApi";
 import { ARCHIVES, findArchiveDetail } from "@/entities/archives/archivesMock";
 
 // 원본 데모(galleryData.js)는 사진마다 색을 손으로 지정해 둔다. 여기서는 배경색을 사진에서 뽑아 쓰고
@@ -43,7 +44,7 @@ const labArchives = [
   // 최근 행사부터 — 날짜가 "YYYY.MM.DD" 문자열이라 문자열 비교가 곧 날짜 순서다
   .sort((a, b) => b.date.localeCompare(a.date));
 
-const galleryPlaneData = labArchives.map((archive, index) => {
+const mockPlaneData = labArchives.map((archive, index) => {
   const image = archive.image || IMAGES[index % IMAGES.length];
   // lab 전용 항목은 상세가 없어서, 눌렀을 때 열 앨범(과 넘겨 볼 현장 사진)은 실제 목데이터를 돌려 쓴다.
   const detail = findArchiveDetail(archive.id) ?? findArchiveDetail(ARCHIVES[index % ARCHIVES.length].id);
@@ -59,5 +60,28 @@ const galleryPlaneData = labArchives.map((archive, index) => {
     textureSrc: image,
   };
 });
+
+// 서버에서 받아 둔 올해 아카이빙이 있으면 그걸 쓴다(대표 사진을 첫 장으로 현장 사진을 잇는다).
+// 사진이 한 장도 없는 행사는 카드로 그릴 수 없어서 뺀다
+const realPlaneData = REAL_ARCHIVES.filter(
+  (archive) =>
+    archive.date.startsWith(CURRENT_YEAR) &&
+    (archive.image || archive.photos.length > 0),
+)
+  // 한 해를 처음부터 따라가도록 오래된 행사부터 — 날짜가 "YYYY.MM.DD"라 문자열 비교가 곧 날짜 순서다
+  .sort((a, b) => a.date.localeCompare(b.date))
+  .map((archive, index) => {
+  const photos = archive.photos.filter((photo) => photo !== archive.image);
+  return {
+    archiveId: archive.id,
+    fallbackColor: FALLBACK_COLOR,
+    label: { color: "#f4f4f4", date: archive.date, word: archive.title },
+    photos: archive.image ? [archive.image, ...photos] : photos,
+    position: { x: X_OFFSETS[index % X_OFFSETS.length], y: 0 },
+    textureSrc: archive.image || photos[0],
+  };
+});
+
+const galleryPlaneData = realPlaneData.length > 0 ? realPlaneData : mockPlaneData;
 
 export { galleryPlaneData };
