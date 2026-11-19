@@ -2,7 +2,11 @@
   "redirects": [
     {
       "source": "/",
-      "has": [{ "type": "host", "value": "slg.kmusw.org" }],
+      "destination": "/archives/lab",
+      "permanent": false
+    },
+    {
+      "source": "/((?!archives/lab$|archives/[^/]+(?:/photos(?:/[^/]+)?)?$|assets/|favicon\\.svg$|index\\.html$).*)",
       "destination": "/archives/lab",
       "permanent": false
     }
