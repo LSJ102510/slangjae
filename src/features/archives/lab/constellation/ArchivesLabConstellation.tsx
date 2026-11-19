@@ -80,8 +80,6 @@ function twinkleStyle(hubIndex: number, spokeIndex: number): CSSProperties {
   };
 }
 
-const MONO_FONT = "ui-monospace, SFMono-Regular, Menlo, monospace";
-
 // 허브 아래 이름이 옆 허브와 겹치지 않게 짧게 자른다
 function shortTitle(title: string) {
   return title.length > 11 ? `${title.slice(0, 10)}…` : title;
@@ -307,8 +305,8 @@ function ArchivesLabConstellation({
             <h2 className="font-bold text-[52px] leading-none tracking-tight min-[769px]:text-7xl">
               올해의 울림
             </h2>
-            {/* 참고 화면 제목 아래의 고정폭 글자 한 줄처럼 — 이번 학생회 임기 */}
-            <p className="mt-3 font-mono text-sm text-white/80 tracking-wide">
+            {/* 제목 아래 이번 학생회 임기 */}
+            <p className="mt-3 font-medium text-base text-white/80 tabular-nums">
               2025.11 ~ 2026.11
             </p>
           </div>
@@ -467,7 +465,7 @@ function ArchivesLabConstellation({
                       />
                       <text
                         fill="white"
-                        fontFamily={MONO_FONT}
+                        fontWeight={500}
                         fontSize={12}
                         textAnchor="middle"
                         x={hub.x}
@@ -514,7 +512,7 @@ function ArchivesLabConstellation({
                 />
                 {/* PC에서는 별 허브(가로 60% 자리) 바로 왼쪽까지 끌어온다(글은 왼쪽 정렬) — 별을 가리지 않으면서 가운데에 가깝게 */}
                 <div className="pointer-events-none absolute top-[52%] left-6 max-w-[66%] -translate-y-1/2 min-[769px]:right-[calc(40%+56px)] min-[769px]:left-auto min-[769px]:max-w-[46%]">
-                  <p className="font-mono text-white/60 text-xs tabular-nums">
+                  <p className="font-medium text-sm text-white/65 tabular-nums">
                     {String(index + 1).padStart(2, "0")} / {events.length} ·{" "}
                     {event.date}
                   </p>
@@ -538,7 +536,7 @@ function ArchivesLabConstellation({
                       </p>
                     )}
                     <button
-                      className="mt-5 rounded-full bg-black/45 px-4 py-2 font-mono text-sm text-white active:bg-black/60"
+                      className="mt-5 rounded-full bg-black/45 px-4 py-2 font-semibold text-sm text-white active:bg-black/60"
                       onClick={() => onOpenAlbum(index, event.archiveId)}
                       type="button"
                     >
@@ -572,9 +570,7 @@ function ArchivesLabConstellation({
                           className="border-white/20 border-b px-6 py-4 last:border-b-0"
                           key={label}
                         >
-                          <dt className="font-mono text-white/55 text-xs">
-                            {label}
-                          </dt>
+                          <dt className="text-sm text-white/55">{label}</dt>
                           <dd className="mt-1.5 text-[16px]">{value}</dd>
                         </div>
                       ))}
@@ -621,7 +617,7 @@ function ArchivesLabConstellation({
             <IconChevronLeft />
           </button>
           <p
-            className={`font-mono text-white/70 text-xs tabular-nums transition-opacity ${isInEvent ? "opacity-100" : "opacity-0"}`}
+            className={`font-medium text-sm text-white/70 tabular-nums transition-opacity ${isInEvent ? "opacity-100" : "opacity-0"}`}
           >
             {String(activeIndex + 1).padStart(2, "0")} / {events.length}
           </p>
