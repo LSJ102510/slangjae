@@ -267,6 +267,24 @@ function ArchivesLabConstellation({
 
   const isInEvent = activeIndex >= 0;
 
+  // 뒤로가기 — 행사 구역이나 맺음 화면을 보고 있으면 먼저 첫 화면(올해의 울림)으로 올라가고,
+  // 첫 화면에서 누르면 별자리를 닫는다
+  function handleBack() {
+    const scroller = scrollRef.current;
+    if (scroller && scroller.scrollTop > 0) {
+      scroller.scrollTo({ behavior: "smooth", top: 0 });
+      if (window.location.hash) {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          window.location.pathname + window.location.search,
+        );
+      }
+      return;
+    }
+    onClose();
+  }
+
   return (
     <div
       className={`${entrance === "fade" ? "lab-fade-in" : "lab-slide-up"} fixed inset-0 z-[25] overflow-hidden text-white transition-colors duration-700`}
@@ -591,13 +609,13 @@ function ArchivesLabConstellation({
         </section>
       </div>
 
-      {/* 위 — 뒤로(환영 화면으로)와 지금 행사 번호 */}
+      {/* 위 — 뒤로가기(handleBack)와 지금 행사 번호 */}
       <div className="pointer-events-none absolute inset-x-0 top-0 pt-safe-top">
         <div className="flex h-14 items-center justify-between px-4">
           <button
-            aria-label="환영 화면으로"
+            aria-label="뒤로가기"
             className="pointer-events-auto flex size-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white backdrop-blur-md active:bg-white/20"
-            onClick={onClose}
+            onClick={handleBack}
             type="button"
           >
             <IconChevronLeft />
