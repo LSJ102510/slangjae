@@ -38,6 +38,7 @@ interface LabEngineCallbacks {
   onOpen: (archiveId: string, target: LabOpenTarget) => void;
   onOpenStart: (archiveId: string) => void;
   onTopColorChange: (hex: string) => void;
+  onEndChange: (isAtEnd: boolean) => void;
 }
 
 // 엔진이 첫 색을 알려 주기 전 상태표시줄 색 — 캔버스 바탕(bg-black)과 같다
@@ -148,6 +149,8 @@ function ArchivesLabScreen() {
   );
   const [isOpening, setIsOpening] = useState(false);
   const [activeCard, setActiveCard] = useState<LabActiveCard | null>(null);
+  // 마지막 카드에서 한 번 더 밀면 끝 화면(환영 문구)이 뜬다
+  const [isAtEnd, setIsAtEnd] = useState(false);
   const previousCardRef = useRef<LabActiveCard | null>(null);
 
   // 폰 브라우저는 상태표시줄 색을 theme-color(Android Chrome)나 html 배경(iOS Safari)에서 가져온다.
@@ -158,6 +161,7 @@ function ArchivesLabScreen() {
   const themeColorMetaRef = useRef<HTMLMetaElement | null>(null);
   const engineTopColorRef = useRef(LAB_INITIAL_TOP_COLOR);
   const isEnteredRef = useRef(isEntered);
+  const isAtEndRef = useRef(isAtEnd);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -184,15 +188,17 @@ function ArchivesLabScreen() {
     };
   }, []);
 
+  // 끝 화면도 진입 화면과 같은 포스터 배경이라 같은 색을 쓴다
   useEffect(() => {
     isEnteredRef.current = isEntered;
+    isAtEndRef.current = isAtEnd;
     if (themeColorMetaRef.current) {
       applyTopColor(
         themeColorMetaRef.current,
-        isEntered ? engineTopColorRef.current : LAB_INTRO_TOP_COLOR,
+        isEntered && !isAtEnd ? engineTopColorRef.current : LAB_INTRO_TOP_COLOR,
       );
     }
-  }, [isEntered]);
+  }, [isEntered, isAtEnd]);
 
   useEffect(() => {
     const container = canvasContainerRef.current;
@@ -230,9 +236,16 @@ function ArchivesLabScreen() {
       },
       onTopColorChange: (hex) => {
         engineTopColorRef.current = hex;
-        if (isEnteredRef.current && themeColorMetaRef.current) {
+        if (
+          isEnteredRef.current &&
+          !isAtEndRef.current &&
+          themeColorMetaRef.current
+        ) {
           applyTopColor(themeColorMetaRef.current, hex);
         }
+      },
+      onEndChange: (nextIsAtEnd) => {
+        setIsAtEnd(nextIsAtEnd);
       },
       onOpenStart: (archiveId) => {
         isOpeningRef.current = true;
@@ -321,7 +334,7 @@ function ArchivesLabScreen() {
           </div>
         </div>
 
-        {isEntered && activeCard && (
+        {isEntered && activeCard && !isAtEnd && (
           <>
             <ArchivesLabCaption
               card={activeCard}
@@ -350,6 +363,36 @@ function ArchivesLabScreen() {
           </div>
           <div className="h-safe-bottom" />
         </div>
+      </div>
+
+      {/* 끝 화면 — 마지막 카드를 지나면 진입 화면과 같은 포스터 배경 위로 환영 문구가 뜬다.
+          뒤로가기 버튼(z-10)은 위에 남기고, 다시 아래로 밀면 마지막 카드로 돌아간다(스크롤은 window에서 받는다) */}
+      <div
+        className={`fixed inset-0 isolate z-5 flex flex-col justify-end px-6 text-white transition-opacity duration-700 ${
+          isEntered && isAtEnd ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      >
+        <ArchivesLabIntroBackground />
+        <p className="font-semibold text-white/50 text-xs tracking-widest">
+          STREAM ARCHIVE
+        </p>
+        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight">
+          슬랑제: 울림에
+          <br />
+          오신 걸 환영합니다
+        </h1>
+        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
+          올해의 마지막 이야기를 함께 만들어요.
+        </p>
+        <button
+          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black"
+          onClick={() => engineRef.current?.scrollToIndex(0)}
+          type="button"
+        >
+          처음으로
+        </button>
+        <div className="h-6" />
+        <div className="h-safe-bottom" />
       </div>
 
       {/* 진입 화면 — 들어가면 카드가 멀리서 날아온다 */}

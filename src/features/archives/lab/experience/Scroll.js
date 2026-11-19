@@ -36,6 +36,8 @@ class Scroll {
     this.useScrollBounds = true
     this.firstPlaneViewOffset = 5
     this.lastPlaneViewOffset = 5
+    // 마지막 카드 뒤로 한 칸 더 갈 수 있게 둔다 — 그 칸에서 끝 화면(환영 문구)이 뜬다
+    this.endScreenSteps = 1
     this.minCameraZ = -Infinity
     this.maxCameraZ = Infinity
     this.cameraStartZ = this.camera.position.z
@@ -155,7 +157,8 @@ class Scroll {
   updateCameraBounds() {
     const depthRange = this.gallery.getDepthRange()
     this.maxCameraZ = depthRange.nearestZ + this.firstPlaneViewOffset
-    this.minCameraZ = depthRange.deepestZ + this.lastPlaneViewOffset
+    this.minCameraZ =
+      depthRange.deepestZ + this.lastPlaneViewOffset - this.gallery.planeGap * this.endScreenSteps
 
     if (this.minCameraZ > this.maxCameraZ) {
       this.minCameraZ = this.maxCameraZ

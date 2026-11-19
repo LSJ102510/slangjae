@@ -13,6 +13,7 @@ class Engine {
   //   onActiveChange({ index, archiveId, label, photoIndex, photoCount, captionRect })
   //   onOpenStart(archiveId): 카드를 눌러 확대 연출이 시작될 때
   //   onTopColorChange(hex): 화면 위 가장자리 배경색이 바뀔 때 — 폰 상태표시줄을 같은 색으로 칠한다
+  //   onEndChange(isAtEnd): 마지막 카드를 지나 끝 화면 칸에 들어가거나 나올 때
   //   onOpen(archiveId, target): 확대 연출이 끝났을 때 — target은 'detail'(사진을 눌렀을 때, 행사 상세)
   //                              또는 'photos'(앨범 열기 버튼, 현장 사진 모아보기)
   constructor(canvas, callbacks = {}) {
@@ -40,6 +41,7 @@ class Engine {
 
     // 활성 카드 — 바뀔 때만 React에 알린다
     this.activeIndex = -1
+    this.isAtEnd = null
     this.lastCaptionKey = null
 
     // 진입 연출 — 멀리서 카드 쪽으로 날아 들어온다(enter() 전까지는 멀리 떠 있다)
@@ -149,7 +151,7 @@ class Engine {
   }
 
   openActive(target = 'detail') {
-    if (this.isOpening || this.activeIndex < 0) return
+    if (this.isOpening || this.activeIndex < 0 || this.isAtEnd) return
     const plane = this.experience.gallery.planes[this.activeIndex]
     if (!plane) return
 
@@ -202,7 +204,14 @@ class Engine {
 
   updateActive() {
     const lastIndex = this.experience.gallery.planes.length - 1
-    const nextIndex = THREE.MathUtils.clamp(this.scroll.getActiveIndex(), 0, lastIndex)
+    const rawIndex = this.scroll.getActiveIndex()
+    // 마지막 카드 다음 칸은 카드가 아니라 끝 화면이다 — 활성 카드는 마지막 카드에 둔 채 따로 알린다
+    const isAtEnd = rawIndex > lastIndex
+    if (isAtEnd !== this.isAtEnd) {
+      this.isAtEnd = isAtEnd
+      this.callbacks.onEndChange?.(isAtEnd)
+    }
+    const nextIndex = THREE.MathUtils.clamp(rawIndex, 0, lastIndex)
     const plane = this.experience.gallery.planes[nextIndex]
     // 사진을 넘겨 비율이 바뀌면 캡션 자리도 따라 옮긴다
     const captionRect = plane && this.getCaptionRect(plane)
@@ -321,6 +330,7 @@ class Engine {
     this.scroll.isInputLocked = !this.isEntered
     // 다음 프레임에 활성 카드를 다시 알려서 새 화면의 캡션이 바로 채워지게 한다
     this.activeIndex = -1
+    this.isAtEnd = null
     this.lastCaptionKey = null
     this.lastTopColorHex = null
     this.bindEvents()
