@@ -25,6 +25,7 @@ interface LabEngine {
   enter: () => void;
   scrollToIndex: (index: number) => void;
   openActive: (target: LabOpenTarget) => void;
+  shiftPhoto: (direction: 1 | -1) => void;
   pause: () => void;
   resume: (callbacks: LabEngineCallbacks) => void;
   dispose: () => void;
@@ -339,6 +340,9 @@ function ArchivesLabScreen() {
             <ArchivesLabCaption
               card={activeCard}
               onOpen={() => engineRef.current?.openActive("photos")}
+              onShiftPhoto={(direction) =>
+                engineRef.current?.shiftPhoto(direction)
+              }
               totalCount={galleryPlaneData.length}
             />
             <ArchivesLabTimeline
@@ -349,9 +353,10 @@ function ArchivesLabScreen() {
           </>
         )}
 
-        {/* 첫 카드에서만 — 위로 밀면 다음(이전 날짜) 행사로 간다는 걸 알려 준다 */}
+        {/* 첫 카드에서만 — 위로 밀면 다음(이전 날짜) 행사로 간다는 걸 알려 준다.
+            PC는 가운데 아래가 캡션과 겹쳐서 오른쪽 아래(타임라인 왼쪽)에 두고, 마우스·키보드 문구로 바꾼다 */}
         <div
-          className={`absolute inset-x-0 bottom-0 flex flex-col items-center pb-6 text-white/50 text-xs transition-opacity duration-500 ${
+          className={`absolute inset-x-0 bottom-0 flex flex-col items-center pb-6 text-white/50 text-xs transition-opacity duration-500 min-[769px]:items-end min-[769px]:pr-16 min-[769px]:pb-10 ${
             isEntered && activeCard?.index === 0 && !isOpening
               ? "opacity-100"
               : "opacity-0"
@@ -359,7 +364,12 @@ function ArchivesLabScreen() {
         >
           <div className="lab-float flex flex-col items-center">
             <IconChevronUpSmall />
-            위로 밀어 다음 행사 · 옆으로 밀어 사진 넘기기
+            <span className="min-[769px]:hidden">
+              위로 밀어 다음 행사 · 옆으로 밀어 사진 넘기기
+            </span>
+            <span className="hidden min-[769px]:inline">
+              스크롤·↑↓ 키로 다음 행사 · ←→ 키로 사진 넘기기
+            </span>
           </div>
           <div className="h-safe-bottom" />
         </div>
@@ -368,7 +378,7 @@ function ArchivesLabScreen() {
       {/* 끝 화면 — 마지막 카드를 지나면 진입 화면과 같은 포스터 배경 위로 환영 문구가 뜬다.
           뒤로가기 버튼(z-10)은 위에 남기고, 다시 아래로 밀면 마지막 카드로 돌아간다(스크롤은 window에서 받는다) */}
       <div
-        className={`fixed inset-0 isolate z-5 flex flex-col justify-end px-6 text-white transition-opacity duration-700 ${
+        className={`fixed inset-0 isolate z-5 flex flex-col justify-end px-6 text-white transition-opacity duration-700 min-[769px]:px-20 min-[769px]:pb-14 ${
           isEntered && isAtEnd ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -376,16 +386,16 @@ function ArchivesLabScreen() {
         <p className="font-semibold text-white/50 text-xs tracking-widest">
           STREAM ARCHIVE
         </p>
-        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight">
+        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
           슬랑제: 울림에
           <br />
           오신 걸 환영합니다
         </h1>
-        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
+        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed min-[769px]:text-base">
           올해의 마지막 이야기를 함께 만들어요.
         </p>
         <button
-          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black"
+          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black min-[769px]:w-80 min-[769px]:self-start"
           onClick={() => engineRef.current?.scrollToIndex(0)}
           type="button"
         >
@@ -397,7 +407,7 @@ function ArchivesLabScreen() {
 
       {/* 진입 화면 — 들어가면 카드가 멀리서 날아온다 */}
       <div
-        className={`fixed inset-0 z-20 flex flex-col justify-end px-6 text-white transition-opacity duration-700 ${
+        className={`fixed inset-0 z-20 flex flex-col justify-end px-6 text-white transition-opacity duration-700 min-[769px]:px-20 min-[769px]:pb-14 ${
           isEntered ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
       >
@@ -405,16 +415,21 @@ function ArchivesLabScreen() {
         <p className="font-semibold text-white/50 text-xs tracking-widest">
           STREAM ARCHIVE
         </p>
-        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight">
+        <h1 className="mt-3 font-bold text-3xl leading-tight tracking-tight min-[769px]:text-5xl">
           올해 함께한
           <br />
           순간들
         </h1>
-        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed">
-          위로 밀어 올해 행사를 하나씩 둘러보세요.
+        <p className="mt-3 break-keep text-sm text-white/60 leading-relaxed min-[769px]:text-base">
+          <span className="min-[769px]:hidden">
+            위로 밀어 올해 행사를 하나씩 둘러보세요.
+          </span>
+          <span className="hidden min-[769px]:inline">
+            스크롤해서 올해 행사를 하나씩 둘러보세요.
+          </span>
         </p>
         <button
-          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black transition-opacity disabled:opacity-40"
+          className="mt-8 h-14 rounded-full bg-white font-semibold text-base text-black transition-opacity disabled:opacity-40 min-[769px]:w-80 min-[769px]:self-start"
           disabled={!isReady}
           onClick={handleEnter}
           type="button"

@@ -403,7 +403,8 @@ class Gallery {
     const widthRatio = isMobileViewport
       ? Math.max(1 - (this.mobileSidePadding * 2) / this.viewportWidth, 0.1)
       : 0.72
-    const heightRatio = isMobileViewport ? 0.56 : 0.72
+    // PC는 사진 아래 캡션(약 120px)이 화면 안에 들어오게 폰보다 덜 줄이되 0.72보다는 낮춘다
+    const heightRatio = isMobileViewport ? 0.56 : 0.6
     const geometrySize = 3
 
     const scaleByWidth = (visibleWidth * widthRatio) / (geometrySize * aspectRatio)

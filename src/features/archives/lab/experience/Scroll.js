@@ -57,6 +57,27 @@ class Scroll {
     this.touchAxisLockDistance = 8
     this.swipeDistance = 40
     this.onSwipeX = null
+    this.wheelXAccumulated = 0
+    this.wheelXLastTime = 0
+    this.wheelXFired = false
+    this.wheelXIdleReset = 200
+
+    // PC 키보드 — 위·아래(PageUp·PageDown·Space)는 이전·다음 행사. 왼쪽·오른쪽 사진 넘기기는 Engine.onKeyDown이 한다
+    this.onKeyDown = (event) => {
+      if (this.isInputLocked || event.altKey || event.ctrlKey || event.metaKey) return
+      // 들어가기를 누른 뒤에도 초점이 (안 보이는) 그 버튼에 남아 있어서 버튼에 초점이 있어도 받는다.
+      // 글 입력 중이거나, Space·Enter로 버튼을 누르는 건 그대로 둔다
+      const target = event.target instanceof HTMLElement ? event.target : null
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      if (event.key === ' ' && target?.closest('button, a')) return
+      const step = this.getScrollStep()
+      const keySteps = { ArrowDown: 1, PageDown: 1, ' ': 1, ArrowUp: -1, PageUp: -1 }
+      if (event.key in keySteps && step > 0) {
+        event.preventDefault()
+        const direction = event.key === ' ' && event.shiftKey ? -1 : keySteps[event.key]
+        this.addScrollInput(direction * step)
+      }
+    }
 
     // 진입·열기 연출용 카메라 오프셋 — 스크롤 위치(baseCameraZ)와 따로 더해서, 카드 투명도 계산은 흔들리지 않는다.
     this.cameraOffset = 0
@@ -67,6 +88,12 @@ class Scroll {
     this.onWheel = (event) => {
       event.preventDefault()
       if (this.isInputLocked) return
+      // PC 트랙패드를 옆으로 밀면 가로 스와이프처럼 사진을 넘긴다. 한 번 밀 때 이벤트가 여러 개 와서
+      // 일정 거리만큼 모이면 한 장 넘기고, 손을 떼고 다시 밀 때까지(이벤트가 잠시 끊길 때까지) 더 넘기지 않는다.
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+        this.handleWheelX(event.deltaX)
+        return
+      }
       const normalizedWheelDelta = this.normalizeWheelDelta(event) * this.wheelScrollSpeed
       this.addScrollInput(normalizedWheelDelta)
     }
@@ -103,6 +130,20 @@ class Scroll {
       // 왼쪽으로 밀면 다음 사진(책장 넘기듯)
       this.onSwipeX?.(deltaX < 0 ? 1 : -1)
     }
+  }
+
+  handleWheelX(deltaX) {
+    const now = performance.now()
+    if (now - this.wheelXLastTime > this.wheelXIdleReset) {
+      this.wheelXAccumulated = 0
+      this.wheelXFired = false
+    }
+    this.wheelXLastTime = now
+    if (this.wheelXFired) return
+    this.wheelXAccumulated += deltaX
+    if (Math.abs(this.wheelXAccumulated) < this.swipeDistance) return
+    this.wheelXFired = true
+    this.onSwipeX?.(this.wheelXAccumulated > 0 ? 1 : -1)
   }
 
   // 타임라인에서 고른 카드로 바로 간다 — 한 장씩 가두는 addScrollInput을 거치지 않는다.
@@ -152,6 +193,7 @@ class Scroll {
     window.addEventListener('touchstart', this.onTouchStart, { passive: true })
     window.addEventListener('touchmove', this.onTouchMove, { passive: false })
     window.addEventListener('touchend', this.onTouchEnd, { passive: true })
+    window.addEventListener('keydown', this.onKeyDown)
   }
 
   updateCameraBounds() {
@@ -386,6 +428,7 @@ class Scroll {
     window.removeEventListener('touchstart', this.onTouchStart)
     window.removeEventListener('touchmove', this.onTouchMove)
     window.removeEventListener('touchend', this.onTouchEnd)
+    window.removeEventListener('keydown', this.onKeyDown)
   }
 
   dispose() {

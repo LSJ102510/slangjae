@@ -1,4 +1,7 @@
-import { IconChevronRightSmall } from "@wanteddev/wds-icon";
+import {
+  IconChevronLeftSmall,
+  IconChevronRightSmall,
+} from "@wanteddev/wds-icon";
 
 import type { LabActiveCard } from "@/features/archives/lab/types";
 
@@ -6,6 +9,7 @@ interface ArchivesLabCaptionProps {
   card: LabActiveCard;
   totalCount: number;
   onOpen: () => void;
+  onShiftPhoto: (direction: 1 | -1) => void;
 }
 
 // 사진 바로 아래, 사진 폭에 맞춰 붙는 캡션 — 전시 라벨처럼 "번호 ── 사진 수" 머리줄, 제목, 날짜와 열기 버튼.
@@ -17,6 +21,7 @@ function ArchivesLabCaption({
   card,
   totalCount,
   onOpen,
+  onShiftPhoto,
 }: ArchivesLabCaptionProps) {
   const number = String(card.index + 1).padStart(2, "0");
   const total = String(totalCount).padStart(2, "0");
@@ -39,8 +44,29 @@ function ArchivesLabCaption({
             <span className="text-white/40"> / {total}</span>
           </span>
           <span className="lab-draw h-px flex-1 bg-white/30" />
-          <span className="text-white/60">
+          {/* PC는 옆으로 밀 수 없어서 사진 수 양옆에 넘기기 버튼을 둔다(Gallery.mobileBreakpoint 768px 기준) */}
+          <span className="flex items-center gap-1 text-white/60">
+            {card.photoCount > 1 && (
+              <button
+                aria-label="이전 사진"
+                className="pointer-events-auto hidden size-6 items-center justify-center rounded-full text-white/70 hover:bg-white/15 hover:text-white min-[769px]:flex"
+                onClick={() => onShiftPhoto(-1)}
+                type="button"
+              >
+                <IconChevronLeftSmall />
+              </button>
+            )}
             사진 {card.photoIndex + 1}/{card.photoCount}
+            {card.photoCount > 1 && (
+              <button
+                aria-label="다음 사진"
+                className="pointer-events-auto hidden size-6 items-center justify-center rounded-full text-white/70 hover:bg-white/15 hover:text-white min-[769px]:flex"
+                onClick={() => onShiftPhoto(1)}
+                type="button"
+              >
+                <IconChevronRightSmall />
+              </button>
+            )}
           </span>
         </div>
 
@@ -59,7 +85,7 @@ function ArchivesLabCaption({
             {card.label.date}
           </p>
           <button
-            className="pointer-events-auto flex h-8 shrink-0 items-center gap-0.5 rounded-full border border-white/20 bg-white/10 pr-2 pl-3 font-semibold text-xs backdrop-blur-md active:bg-white/20"
+            className="pointer-events-auto flex h-8 shrink-0 items-center gap-0.5 rounded-full border border-white/20 bg-white/10 pr-2 pl-3 font-semibold text-xs backdrop-blur-md hover:bg-white/20 active:bg-white/20"
             onClick={onOpen}
             type="button"
           >
